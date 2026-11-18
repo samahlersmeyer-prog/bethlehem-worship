@@ -112,6 +112,9 @@
   .linkrow.wide { max-width: none; }
   .toolbar label { display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); }
   .toolbar label input { width: auto; }
+  .hymnal .hrow { grid-template-columns: 90px 1fr 200px auto; }
+  .hymnal .hrow .ops button { font-size: 13px; padding: 4px 10px; white-space: nowrap; }
+  .hymnal .hrow .uses a, .hymnal .hrow .uses span { font-size: 12.5px; }
   p.or { color: var(--muted); font-size: 13px; margin: 16px 0 0; }
   #printsheet { display: none; }
   @media (max-width: 760px) {
@@ -125,6 +128,7 @@
     .toolbar select, .toolbar input { min-width: 0; width: 100%; }
     table.vol td:first-child { width: auto; } table.series td.tx { display: none; }
     nav.tabs { overflow-x: auto; }
+    .hymnal .hrow { grid-template-columns: 70px 1fr; } .hymnal .hrow .uses, .hymnal .hrow .ops { grid-column: 2; }
   }
   @media print {
     header, main, .modal { display: none !important; }
@@ -146,12 +150,12 @@
   <nav class="tabs"><button data-view="calendar" class="on">Church Year</button><button data-view="series">Sermon Series</button><button data-view="hymns">Hymns</button><button data-view="reports">Reports</button></nav>
 </header>
 <main id="app"><p class="muted">Loading…</p></main>
-<script src="firebase-config.js?v=4"></script>
-<script src="js/lectionary.js?v=4"></script>
-<script src="js/hymns.js?v=4"></script>
-<script src="js/calendar.js?v=4"></script>
-<script src="js/seed.js?v=4"></script>
-<script src="js/store.js?v=4"></script>
-<script src="js/app.js?v=4"></script>
+<script src="firebase-config.js?v=5"></script>
+<script src="js/lectionary.js?v=5"></script>
+<script src="js/hymns.js?v=5"></script>
+<script src="js/calendar.js?v=5"></script>
+<script src="js/seed.js?v=5"></script>
+<script src="js/store.js?v=5"></script>
+<script src="js/app.js?v=5"></script>
 </body>
 </html>

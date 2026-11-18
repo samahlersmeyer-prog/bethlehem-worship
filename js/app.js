@@ -121,7 +121,7 @@
     const m = String(v || '').match(/^\s*(LSB|TFBF)?\s*#?\s*(\d{1,4})\s*$/i);
     if (!m) return v;
     const book = (m[1] || 'LSB').toUpperCase(), n = m[2], id = `${book} ${n}`;
-    const t = usedTitles()[id] || (book === 'LSB' ? HY.titleFor(n) : '');
+    const t = usedTitles()[id] || HY.titleFor(n, book);
     return t ? `${id} "${t}"` : id;
   }
   let _dl = null;
@@ -129,7 +129,8 @@
     if (_dl && _dl.n === Object.keys(idx).length) return _dl.html;
     const seen = new Set(); const opts = [];
     for (const e of Object.values(idx)) { const v = `${e.id}${e.title ? ` "${e.title}"` : ''}`; if (!seen.has(v)) { seen.add(v); opts.push(v); } }
-    for (const [n, ts] of Object.entries(HY.LSB)) for (const t of new Set([HY.titleFor(n), ...ts])) { const v = `LSB ${n} "${t}"`; if (t && !seen.has(v)) { seen.add(v); opts.push(v); } }
+    for (const [n, x] of Object.entries(HY.LSB)) for (const t of [x[0], ...(x[2] || [])]) { const v = `LSB ${n} "${t}"`; if (t && !seen.has(v)) { seen.add(v); opts.push(v); } }
+    for (const [n, x] of Object.entries(HY.TFBF)) { const v = `TFBF ${n} "${x[0]}"`; if (!seen.has(v)) { seen.add(v); opts.push(v); } }
     _dl = { n: Object.keys(idx).length, html: `<datalist id="hymnlist">${opts.map((v) => `<option value="${esc(v)}">`).join('')}</datalist>` };
     return _dl.html;
   }
@@ -300,6 +301,8 @@
       h += `<div class="hotd"><span class="lbl">Hymn of the Day (LSB)</span>${hds.map((x, i) => `<div><b>${esc(x.n)}</b> ${esc(x.title)}${i ? ' <span class="muted">(also listed)</span>' : ''}
         ${store.canEdit && !p.locked ? `<button class="link" data-act="useHotd" data-n="${esc(x.n)}">Use as Sermon Hymn</button>` : ''}</div>`).join('')}</div>`;
     }
+    const ss = seasonSection(obs ? null : day);
+    if (ss) h += `<div class="hotd"><a href="#hymns" data-hsec="${esc(ss)}">Browse ${esc(ss)} hymns →</a></div>`;
     if (day.notes && day.notes.length) h += `<ul class="lnotes">${day.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>`;
     const lc = lastCycle(day);
     if (lc) {
@@ -360,14 +363,86 @@
     return { prev: list[i - 1] && list[i - 1].date, next: list[i + 1] && list[i + 1].date };
   }
 
-  function hymnsView() {
-    const idx = Object.values(hymnIndex()).sort((a, b) => a.book.localeCompare(b.book) || a.num - b.num);
-    const q = (view.q || '').toLowerCase();
-    const rows = idx.filter((e) => !q || e.id.toLowerCase().includes(q) || e.title.toLowerCase().includes(q));
-    return `<div class="toolbar"><input id="hq" placeholder="Search hymns by number or title" value="${esc(view.q || '')}"><span class="grow"></span><span class="muted">${idx.length} hymns planned across all years</span></div>
-      <div class="card list">${rows.map((e) => `<div class="row static"><span class="when"><b>${esc(e.id)}</b></span><span class="what">${esc(e.title || '—')}</span>
-      <span class="uses">${e.uses.map((u) => `<a href="#day-${esc(u.key)}" title="${esc(u.slot)}">${esc(fmtLong(u.date))}</a>`).join(' ')}</span></div>`).join('') || '<div class="pad muted">No hymns yet.</div>'}</div>`;
+  // Season of the church year → LSB / TFBF section names
+  function seasonSection(day) {
+    if (!day) return '';
+    if (day.key === 'transfiguration') return 'Transfiguration';
+    if (day.key === 'ascension') return 'Ascension';
+    if (day.key === 'trinity') return 'Holy Trinity';
+    if (/^proper2[789]$|^lastSunday$/.test(day.key)) return 'End Times';
+    if (day.key === 'allSaints' || day.kind === 'feast' && /St\.|Saint|Presentation|Annunciation|Visitation/.test(day.name)) return 'Feasts and Festivals';
+    return { Advent: 'Advent', Christmas: 'Christmas', Epiphany: 'Epiphany', Lent: 'Lent', 'Holy Week': 'Holy Week', Easter: 'Easter', Pentecost: 'Pentecost' }[day.season] || '';
   }
+  let _all = null;
+  function hymnsView() {
+    const used = hymnIndex();
+    const mode = view.mode || 'browse';
+    const tabs = `<div class="chips"><button class="chip ${mode === 'browse' ? 'on' : ''}" data-hmode="browse">Hymnals</button><button class="chip ${mode === 'used' ? 'on' : ''}" data-hmode="used">What we've sung</button></div>`;
+    if (mode === 'used') {
+      const idx = Object.values(used).sort((a, b) => a.book.localeCompare(b.book) || a.num - b.num);
+      const q = (view.q || '').toLowerCase();
+      const rows = idx.filter((e) => !q || e.id.toLowerCase().includes(q) || e.title.toLowerCase().includes(q));
+      return `<div class="toolbar">${tabs}<input id="hq" placeholder="Search by number or title" value="${esc(view.q || '')}"><span class="grow"></span><span class="muted">${idx.length} hymns planned across all years</span></div>
+        <div class="card list">${rows.map((e) => `<div class="row static"><span class="when"><b>${esc(e.id)}</b></span><span class="what">${esc(e.title || HY.titleFor(String(e.num), e.book) || '—')}</span>
+        <span class="uses">${e.uses.map((u) => `<a href="#day-${esc(u.key)}" title="${esc(u.slot)}">${esc(fmtLong(u.date))}</a>`).join(' ')}</span></div>`).join('') || '<div class="pad muted">No hymns yet.</div>'}</div>`;
+    }
+    _all = _all || HY.all();
+    const book = view.book || 'all', sec = view.sec || '', q = (view.q || '').toLowerCase().trim();
+    const secs = [...new Set(HY.LSB_SECTIONS.flatMap(([g, l]) => l.map((x) => x[0])).concat(_all.filter((h) => h.book === 'TFBF').flatMap((h) => h.sections)))];
+    const groups = HY.LSB_SECTIONS.map(([g, l]) => `<optgroup label="${esc(g)}">${l.map(([x]) => `<option ${x === sec ? 'selected' : ''}>${esc(x)}</option>`).join('')}</optgroup>`).join('')
+      + `<optgroup label="This Far By Faith topics">${secs.filter((x) => !HY.LSB_SECTIONS.some(([, l]) => l.some((y) => y[0] === x))).sort().map((x) => `<option ${x === sec ? 'selected' : ''}>${esc(x)}</option>`).join('')}</optgroup>`;
+    const hotdOf = {};
+    for (const [k, v] of Object.entries(HY.HOTD)) for (const [ser, nums] of Object.entries(v)) for (const n of nums) (hotdOf[n] = hotdOf[n] || []).push(k + (ser === 'all' ? '' : ' (' + ser + ')'));
+    let rows = _all.filter((h) => (book === 'all' || h.book === book) && (!sec || h.sections.includes(sec)));
+    if (q) rows = rows.filter((h) => String(h.n) === q.replace(/^(lsb|tfbf)\s*/, '') || [h.id, h.title, h.first, h.tune, h.scripture, ...(h.alts || [])].join(' ').toLowerCase().includes(q));
+    rows.sort((a, b) => a.book.localeCompare(b.book) || a.n - b.n);
+    const shown = rows.slice(0, 400);
+    return `<div class="toolbar">${tabs}
+      <select id="hBook"><option value="all">Both hymnals</option><option value="LSB" ${book === 'LSB' ? 'selected' : ''}>Lutheran Service Book</option><option value="TFBF" ${book === 'TFBF' ? 'selected' : ''}>This Far By Faith</option></select>
+      <select id="hSec"><option value="">All seasons & topics</option>${groups}</select>
+      <input id="hq" placeholder="Number, title, first line, tune or Scripture" value="${esc(view.q || '')}">
+      <span class="grow"></span><span class="muted">${rows.length} hymns</span></div>
+      <div class="card list hymnal">${shown.map((h) => { const u = used[h.id]; const last = u && u.uses[u.uses.length - 1];
+        const hd = h.book === 'LSB' ? hotdOf[String(h.n)] : null;
+        return `<div class="row static hrow"><span class="when"><b>${esc(h.id)}</b></span>
+          <span class="what"><b>${esc(h.title)}</b>${h.first && h.first !== h.title ? `<small>${esc(h.first)}</small>` : ''}
+            <small>${esc([h.sections.join(', '), h.scripture, h.tune].filter(Boolean).join(' · '))}</small>
+            ${hd ? `<small class="fest">Hymn of the Day: ${esc(hd.slice(0, 4).join(', '))}${hd.length > 4 ? '…' : ''}</small>` : ''}</span>
+          <span class="uses">${u ? `<a href="#day-${esc(last.key)}">${u.uses.length}× · last ${esc(fmtLong(last.date))}</a>` : '<span class="muted">not used yet</span>'}</span>
+          <span class="ops">${store.canEdit ? `<button data-addhymn="${esc(h.id)}" data-title="${esc(h.title)}">Add to a service</button>` : ''}</span></div>`; }).join('') || '<div class="pad muted">No hymns match.</div>'}
+        ${rows.length > shown.length ? `<div class="pad muted">Showing the first ${shown.length} — narrow the search to see more.</div>` : ''}</div>`;
+  }
+
+  // Put a hymn into a slot of an upcoming service
+  function addHymnTo(id, title) {
+    const today = CY.iso(new Date());
+    const plans = store.all();
+    const opts = [];
+    for (const y of [curYear, curYear + 1]) for (const d of yearData(y).days) if (d.date >= today) opts.push({ key: d.date, date: servedOn(d.date, plans[d.date]), name: d.name });
+    for (const [k, p] of Object.entries(plans)) if (p.custom && p.date >= today) opts.push({ key: k, date: p.date, name: p.name });
+    opts.sort((a, b) => a.date.localeCompare(b.date));
+    const box = document.createElement('div'); box.className = 'modal';
+    box.innerHTML = `<div class="card pad"><b>Add ${esc(id)} “${esc(title)}”</b>
+      <label class="fld"><span>Service</span><select id="ahDay">${opts.slice(0, 80).map((o) => `<option value="${esc(o.key)}">${esc(whenLabel(o.date))} — ${esc(o.name)}</option>`).join('')}</select></label>
+      <label class="fld"><span>Where in the service</span><select id="ahSlot"></select></label>
+      <p class="muted" id="ahMsg"></p>
+      <div class="foot"><span class="grow"></span><button id="ahCancel">Cancel</button><button class="primary" id="ahOk">Add</button></div></div>`;
+    document.body.appendChild(box);
+    const planFor = (k) => store.get(k) || newPlan(findDay(k));
+    const fill = () => { const p = planFor($('#ahDay', box).value);
+      $('#ahSlot', box).innerHTML = (p.slots || []).map((x, i) => `<option value="${i}">${esc(x.label)}${x.value ? ' — ' + esc(x.value).slice(0, 40) : ''}</option>`).join('') + '<option value="new">+ New line “Hymn”</option>';
+      const firstEmpty = (p.slots || []).findIndex((x) => /hymn/i.test(x.label) && !x.value); if (firstEmpty >= 0) $('#ahSlot', box).value = String(firstEmpty);
+      $('#ahMsg', box).textContent = p.locked ? 'This service is marked final.' : ''; };
+    $('#ahDay', box).onchange = fill; fill();
+    $('#ahCancel', box).onclick = () => box.remove();
+    $('#ahOk', box).onclick = async () => {
+      const k = $('#ahDay', box).value; const base = planFor(k); if (base.locked) return;
+      const plan = JSON.parse(JSON.stringify(base)); const v = `${id} "${title}"`; const i = $('#ahSlot', box).value;
+      if (i === 'new') plan.slots.push({ label: 'Hymn', value: v, note: '' }); else plan.slots[+i].value = v;
+      plan.history = addHistory(store.get(k), plan); await store.save(k, plan); box.remove(); location.hash = '#day-' + k;
+    };
+  }
+
 
   function copyFromSelect(key, day) {
     const lc = lastCycle(day);
@@ -627,7 +702,7 @@
   function route() {
     const h = location.hash.replace(/^#\/?/, '');
     if (h.startsWith('day-') || h.startsWith('day/')) { view = { name: 'day', key: decodeURIComponent(h.slice(4)) }; const d = findDay(view.key); if (d) curYear = CY.yearOf(CY.parse(d.date)); }
-    else if (h === 'hymns') view = { name: 'hymns', q: view.q };
+    else if (h === 'hymns') view = { name: 'hymns', q: view.q, mode: view.mode, book: view.book, sec: view.sec };
     else if (h === 'series') view = { name: 'series', season: view.season };
     else if (h === 'reports') view = { name: 'reports', from: view.from, to: view.to };
     else { view = { name: 'calendar' }; draft = null; }
@@ -638,6 +713,9 @@
 
   document.addEventListener('click', (e) => {
     const a = e.target.closest('[data-act]'); if (a) { e.preventDefault(); onAction(a.dataset.act, a); return; }
+    const hs = e.target.closest('[data-hsec]'); if (hs) { view.sec = hs.dataset.hsec; view.mode = 'browse'; view.q = ''; }
+    const hm = e.target.closest('[data-hmode]'); if (hm) { view.mode = hm.dataset.hmode; view.q = ''; render(); return; }
+    const ah = e.target.closest('[data-addhymn]'); if (ah) { addHymnTo(ah.dataset.addhymn, ah.dataset.title); return; }
     const t = e.target.closest('button'); if (!t) return;
     if (t.id === 'signin') store.signIn();
     if (t.id === 'sendLink') linkAction('send');
@@ -670,6 +748,8 @@
         draft.services = (src.services || []).map((x) => ({ label: x.label, musician: '' })); queueSave(true); }
     }
     if (e.target.id === 'seasonSel') { view.season = e.target.value; render(); }
+    if (e.target.id === 'hBook') { view.book = e.target.value; render(); }
+    if (e.target.id === 'hSec') { view.sec = e.target.value; render(); }
     if (e.target.id === 'repFrom' || e.target.id === 'repTo') { view.from = $('#repFrom').value; view.to = $('#repTo').value; render(); }
     if (e.target.classList.contains('obsdate') && draft && e.target.value) {
       const day = findDay(view.key);
