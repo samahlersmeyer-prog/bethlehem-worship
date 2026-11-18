@@ -115,6 +115,14 @@
   .hymnal .hrow { grid-template-columns: 90px 1fr 200px auto; }
   .hymnal .hrow .ops button { font-size: 13px; padding: 4px 10px; white-space: nowrap; }
   .hymnal .hrow .uses a, .hymnal .hrow .uses span { font-size: 12.5px; }
+  .slots .slot.choir { grid-template-columns: 160px 1fr auto; background: color-mix(in srgb, var(--accent, #6b4) 6%, transparent); border-radius: 8px; padding: 6px; }
+  .slots .slot.choir .choirf { display: flex; flex-wrap: wrap; gap: 6px; }
+  .slots .slot.choir .choirf input { flex: 1 1 150px; min-width: 0; }
+  .slots .slot.choir .chips { flex: 1 1 100%; }
+  .checks div { font-size: 13px; padding: 6px 10px; border-radius: 6px; margin-top: 6px; }
+  .checks .warn { background: #fff3cd; color: #6b4e00; }
+  .checks .info { background: #eef3f8; color: #2c4a66; }
+  input.copies { width: 64px; }
   p.or { color: var(--muted); font-size: 13px; margin: 16px 0 0; }
   #printsheet { display: none; }
   @media (max-width: 760px) {
@@ -124,6 +132,7 @@
     .row .swatch { grid-row: 1 / span 4; height: 100%; }
     .grid2 { grid-template-columns: 1fr; }
     .slots .slot { grid-template-columns: 1fr 1fr; }
+    .slots .slot.choir { grid-template-columns: 1fr; }
     .slot .sv { grid-column: 1 / -1; grid-row: 2; } .slot .sn { grid-column: 1 / -1; }
     .toolbar select, .toolbar input { min-width: 0; width: 100%; }
     table.vol td:first-child { width: auto; } table.series td.tx { display: none; }
@@ -147,15 +156,15 @@
     <h1><small>Bethlehem Lutheran Church · Fort Wayne</small>Worship Planner</h1>
     <div id="mode"></div>
   </div>
-  <nav class="tabs"><button data-view="calendar" class="on">Church Year</button><button data-view="series">Sermon Series</button><button data-view="hymns">Hymns</button><button data-view="reports">Reports</button></nav>
+  <nav class="tabs"><button data-view="calendar" class="on">Church Year</button><button data-view="series">Sermon Series</button><button data-view="hymns">Hymns</button><button data-view="choir">Choir</button><button data-view="reports">Reports</button></nav>
 </header>
 <main id="app"><p class="muted">Loading…</p></main>
-<script src="firebase-config.js?v=6"></script>
-<script src="js/lectionary.js?v=6"></script>
-<script src="js/hymns.js?v=6"></script>
-<script src="js/calendar.js?v=6"></script>
-<script src="js/seed.js?v=6"></script>
-<script src="js/store.js?v=6"></script>
-<script src="js/app.js?v=6"></script>
+<script src="firebase-config.js?v=7"></script>
+<script src="js/lectionary.js?v=7"></script>
+<script src="js/hymns.js?v=7"></script>
+<script src="js/calendar.js?v=7"></script>
+<script src="js/seed.js?v=7"></script>
+<script src="js/store.js?v=7"></script>
+<script src="js/app.js?v=7"></script>
 </body>
 </html>

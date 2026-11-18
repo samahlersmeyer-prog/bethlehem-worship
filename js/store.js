@@ -22,8 +22,11 @@
     let plans = safe.get(LS_KEY);
     if (!plans) { plans = seedAll(); safe.set(LS_KEY, plans); }
     const subs = new Set();
+    let settings = safe.get(LS_KEY + '.settings') || {};
     return {
       mode: 'local',
+      get settings() { return settings; },
+      async saveSettings(next) { settings = Object.assign({}, next); safe.set(LS_KEY + '.settings', settings); subs.forEach((f) => f(plans)); },
       user: { email: 'preview', name: 'Preview' },
       canEdit: true,
       all: () => plans,
@@ -56,7 +59,10 @@
     let unsub = null;
 
     const store = {
-      mode: 'firebase', user: null, canEdit: false,
+      mode: 'firebase', user: null, canEdit: false, settings: {},
+      async saveSettings(next) {
+        await fs.setDoc(fs.doc(db, 'plans', '_settings'), JSON.parse(JSON.stringify(Object.assign({}, next, { updatedAt: new Date().toISOString(), updatedBy: store.user ? store.user.email : '' }))));
+      },
       all: () => plans, get: (k) => plans[k],
       async save(k, plan) {
         const data = JSON.parse(JSON.stringify(Object.assign({}, plan, {
@@ -98,7 +104,7 @@
           if (first && snap.empty) { first = false; store.importSeed(); return; } // first sign-in: load Ben's sheet
           first = false;
           plans = {};
-          snap.forEach((d) => { plans[d.id] = d.data(); });
+          snap.forEach((d) => { if (d.id === '_settings') store.settings = d.data(); else plans[d.id] = d.data(); });
           store.canEdit = true;
           subs.forEach((f) => f(plans));
         }, (err) => {

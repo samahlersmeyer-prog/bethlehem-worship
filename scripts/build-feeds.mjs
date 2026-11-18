@@ -19,7 +19,7 @@ const LOCAL = process.env.PLANS_FILE;
 const sa = LOCAL ? { private_key_id: 'local-test' } : JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 let db = null; const plans = {};
 if (LOCAL) Object.assign(plans, JSON.parse(fs.readFileSync(LOCAL, 'utf8')));
-else { initializeApp({ credential: cert(sa) }); db = getFirestore(); (await db.collection('plans').get()).forEach((d) => { plans[d.id] = d.data(); }); }
+else { initializeApp({ credential: cert(sa) }); db = getFirestore(); (await db.collection('plans').get()).forEach((d) => { if (!d.id.startsWith('_')) plans[d.id] = d.data(); }); }
 
 const TZ = 'America/Indiana/Indianapolis';
 const todayET = new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(new Date()); // YYYY-MM-DD
