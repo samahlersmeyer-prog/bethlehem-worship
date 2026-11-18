@@ -7,7 +7,7 @@ def inline(m):
     if src == 'firebase-config.js':
         return '<script>window.FIREBASE_CONFIG = {};</script>'
     return '<script>\n' + (root / src).read_text() + '\n</script>'
-out = re.sub(r'X', inline, html)
+out = re.sub(r'<script src="([^"?]+)(?:\?[^"]*)?"></script>', inline, html)
 (root / 'dist').mkdir(exist_ok=True)
 (root / 'dist' / 'preview.html').write_text(out)
 print('wrote dist/preview.html', len(out))
