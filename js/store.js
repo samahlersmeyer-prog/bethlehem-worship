@@ -80,7 +80,10 @@
       if (unsub) { unsub(); unsub = null; }
       plans = {};
       if (u) {
+        let first = true;
         unsub = fs.onSnapshot(col, (snap) => {
+          if (first && snap.empty) { first = false; store.importSeed(); return; } // first sign-in: load Ben's sheet
+          first = false;
           plans = {};
           snap.forEach((d) => { plans[d.id] = d.data(); });
           store.canEdit = true;
