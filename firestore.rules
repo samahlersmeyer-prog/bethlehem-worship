@@ -9,8 +9,8 @@ service cloud.firestore {
         && request.auth.token.email in [
         'ben.ahlersmeyer@gmail.com',
         'sam.ahlersmeyer@gmail.com',
-        'kaseyneedham92@gmail.com'
-        // Next: Janelle
+        'kaseyneedham92@gmail.com',
+        'janelle.buford@my.wheaton.edu'
       ];
     }
     match /plans/{id} {
