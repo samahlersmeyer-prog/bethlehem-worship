@@ -120,8 +120,25 @@
   }
 
   function signInView() {
-    return `<div class="card pad center"><h2>Bethlehem Lutheran Church</h2><p>Sign in with the Google account Pastor Ben added to the planning team.</p>
-      <button class="primary" id="signin">Sign in with Google</button></div>`;
+    if (store.isLinkSignIn && store.isLinkSignIn()) {
+      return `<div class="card pad center"><h2>Almost there</h2><p>Confirm the email address this sign-in link was sent to.</p>
+        <div class="linkrow"><input id="linkEmail" type="email" value="${esc(store.linkEmail() || '')}" placeholder="you@example.com"><button class="primary" id="finishLink">Sign in</button></div>
+        <p class="muted" id="linkMsg"></p></div>`;
+    }
+    return `<div class="card pad center"><h2>Bethlehem Lutheran Church</h2><p>Sign in with the account Pastor Ben added to the planning team.</p>
+      <button class="primary" id="signin">Sign in with Google</button>
+      <p class="or">or, without a Google account</p>
+      <div class="linkrow"><input id="linkEmail" type="email" placeholder="your email address"><button id="sendLink">Email me a sign-in link</button></div>
+      <p class="muted" id="linkMsg"></p></div>`;
+  }
+  async function linkAction(kind) {
+    const email = ($('#linkEmail').value || '').trim();
+    const msg = $('#linkMsg');
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { msg.textContent = 'Enter your email address.'; return; }
+    try {
+      if (kind === 'send') { msg.textContent = 'Sending…'; await store.sendLink(email); msg.textContent = `Check ${email} for a sign-in link (look in spam if it isn't there in a minute).`; }
+      else { msg.textContent = 'Signing in…'; await store.finishLink(email); }
+    } catch (e) { msg.textContent = 'That didn\'t work: ' + (e.code || e.message) + '. Try requesting a new link.'; }
   }
 
   function yearSwitcher() {
@@ -374,6 +391,8 @@
     const a = e.target.closest('[data-act]'); if (a) { e.preventDefault(); onAction(a.dataset.act, a); return; }
     const t = e.target.closest('button'); if (!t) return;
     if (t.id === 'signin') store.signIn();
+    if (t.id === 'sendLink') linkAction('send');
+    if (t.id === 'finishLink') linkAction('finish');
     if (t.id === 'signout') store.signOut();
     if (t.id === 'addSpecial') addSpecial();
     if (t.id === 'jumpToday') { curYear = CY.yearOf(new Date()); location.hash = '#calendar'; render(); const n = $('#nextRow'); n && n.scrollIntoView({ block: 'center' }); }
@@ -401,6 +420,8 @@
       render();
     });
     store.onAuth = () => render();
+    // Same device that requested the link: finish sign-in automatically
+    if (store.isLinkSignIn && store.isLinkSignIn() && store.linkEmail()) store.finishLink(store.linkEmail()).catch(() => render());
     window.addEventListener('hashchange', route);
     route();
   })();

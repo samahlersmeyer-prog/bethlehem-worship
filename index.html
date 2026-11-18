@@ -89,6 +89,9 @@
   .foot { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
   .modal { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: grid; place-items: center; z-index: 20; }
   .modal .card { width: min(420px, 92vw); }
+  .linkrow { display: flex; gap: 8px; max-width: 440px; margin: 8px auto 0; }
+  .linkrow button { white-space: nowrap; }
+  p.or { color: var(--muted); font-size: 13px; margin: 16px 0 0; }
   #printsheet { display: none; }
   @media (max-width: 760px) {
     .list .row { grid-template-columns: 10px 1fr; }

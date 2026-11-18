@@ -1,10 +1,12 @@
 rules_version = '2';
-// Only the planning team can read or edit plans.
+// Only the planning team can read or edit plans. Sign-in by Google or emailed link
+// (both verify the address); unverified email/password accounts are refused.
 // Add or remove Google accounts here, then: firebase deploy --only firestore:rules
 service cloud.firestore {
   match /databases/{database}/documents {
     function team() {
-      return request.auth != null && request.auth.token.email in [
+      return request.auth != null && request.auth.token.email_verified == true
+        && request.auth.token.email in [
         'ben.ahlersmeyer@gmail.com',
         'sam.ahlersmeyer@gmail.com',
         'kaseyneedham92@gmail.com'

@@ -71,6 +71,18 @@
         for (const [k, v] of Object.entries(seed)) if (!plans[k]) await store.save(k, v);
       },
       async signIn() { await auth.signInWithPopup(a, new auth.GoogleAuthProvider()); },
+      // Passwordless sign-in for people without a Google account
+      async sendLink(email) {
+        await auth.sendSignInLinkToEmail(a, email, { url: location.origin + location.pathname, handleCodeInApp: true });
+        try { localStorage.setItem('bw.linkEmail', email); } catch {}
+      },
+      isLinkSignIn: () => auth.isSignInWithEmailLink(a, location.href),
+      linkEmail: () => { try { return localStorage.getItem('bw.linkEmail'); } catch { return null; } },
+      async finishLink(email) {
+        await auth.signInWithEmailLink(a, email, location.href);
+        try { localStorage.removeItem('bw.linkEmail'); } catch {}
+        history.replaceState(null, '', location.pathname);
+      },
       async signOut() { await auth.signOut(a); },
       onAuth: null,
     };
