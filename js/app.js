@@ -164,7 +164,7 @@
       const fest = (d.festivals || []).map((f) => f.name).join(' · ');
       const isNext = !markedToday && d.date >= today;
       if (isNext) markedToday = true;
-      html += `<a class="row ${d.kind !== 'sunday' ? 'feast' : ''} ${isNext ? 'next' : ''}" href="#/day/${esc(key)}" ${isNext ? 'id="nextRow"' : ''}>
+      html += `<a class="row ${d.kind !== 'sunday' ? 'feast' : ''} ${isNext ? 'next' : ''}" href="#day-${esc(key)}" ${isNext ? 'id="nextRow"' : ''}>
         <span class="swatch" style="background:${CY.COLORS[d.color] || '#ccc'}" title="${esc(d.color)}"></span>
         <span class="when">${esc(when)}</span>
         <span class="what"><b>${esc(d.name)}</b>${fest ? `<small class="fest">${esc(fest)}</small>` : ''}
@@ -178,7 +178,7 @@
 
   function dayView(key) {
     const day = findDay(key);
-    if (!day) return `<p>Not found. <a href="#/">Back</a></p>`;
+    if (!day) return `<p>Not found. <a href="#calendar">Back</a></p>`;
     const saved = store.get(key);
     if (!draft || draft.__key !== key) draft = Object.assign({ __key: key }, JSON.parse(JSON.stringify(saved || newPlan(day))));
     const p = draft;
@@ -190,8 +190,8 @@
     const nav = neighbors(day);
 
     let h = `<div class="dayhead" style="--lc:${CY.COLORS[day.color] || '#999'}">
-      <div class="crumbs"><a href="#/">← ${esc(yearData(CY.yearOf(CY.parse(day.date))).label)} calendar</a>
-        <span class="grow"></span>${nav.prev ? `<a href="#/day/${nav.prev}">‹ Prev</a>` : ''} ${nav.next ? `<a href="#/day/${nav.next}">Next ›</a>` : ''}</div>
+      <div class="crumbs"><a href="#calendar">← ${esc(yearData(CY.yearOf(CY.parse(day.date))).label)} calendar</a>
+        <span class="grow"></span>${nav.prev ? `<a href="#day-${nav.prev}">‹ Prev</a>` : ''} ${nav.next ? `<a href="#day-${nav.next}">Next ›</a>` : ''}</div>
       <h2>${esc(obs ? obs.name : day.name)}</h2>
       <div class="meta">${esc(isSun ? weekend(day.date) : fmtLong(day.date))}${day.series ? ` · Series ${day.series}` : ''}${day.proper && day.proper < 29 ? ` · Proper ${day.proper}` : ''} · <span class="colorname">${esc(obs ? obs.color : day.color)}</span></div>
       ${!saved ? '<div class="hint">Not started — defaults filled in below. Changes save automatically.</div>' : ''}
@@ -268,7 +268,7 @@
     const rows = idx.filter((e) => !q || e.id.toLowerCase().includes(q) || e.title.toLowerCase().includes(q));
     return `<div class="toolbar"><input id="hq" placeholder="Search hymns by number or title" value="${esc(view.q || '')}"><span class="grow"></span><span class="muted">${idx.length} hymns planned across all years</span></div>
       <div class="card list">${rows.map((e) => `<div class="row static"><span class="when"><b>${esc(e.id)}</b></span><span class="what">${esc(e.title || '—')}</span>
-      <span class="uses">${e.uses.map((u) => `<a href="#/day/${esc(u.key)}" title="${esc(u.slot)}">${esc(fmtLong(u.date))}</a>`).join(' ')}</span></div>`).join('') || '<div class="pad muted">No hymns yet.</div>'}</div>`;
+      <span class="uses">${e.uses.map((u) => `<a href="#day-${esc(u.key)}" title="${esc(u.slot)}">${esc(fmtLong(u.date))}</a>`).join(' ')}</span></div>`).join('') || '<div class="pad muted">No hymns yet.</div>'}</div>`;
   }
 
   // ---------- Print ----------
@@ -327,7 +327,7 @@
       case 'down': if (i < draft.slots.length - 1) [draft.slots[i + 1], draft.slots[i]] = [draft.slots[i], draft.slots[i + 1]]; return queueSave(true);
       case 'resetSlots': if (confirmInline(el, 'Replace the order of service?')) { draft.slots = defaultSlots(draft.setting, day); queueSave(true); } return;
       case 'print': return printDay(view.key);
-      case 'delCustom': if (confirmInline(el, 'Delete this service?')) { store.remove(view.key); location.hash = '#/'; } return;
+      case 'delCustom': if (confirmInline(el, 'Delete this service?')) { store.remove(view.key); location.hash = '#calendar'; } return;
     }
   }
   // two-tap confirm without browser dialogs
@@ -355,14 +355,14 @@
       const host = yearData(y).days.filter((d) => d.date <= date && d.kind === 'sunday').pop();
       await store.save(key, { custom: true, date, name, color: host ? host.color : 'white', setting: 'Vespers',
         services: [{ label: 'Service', musician: '' }], slots: defaultSlots('Vespers', { season: host ? host.season : '' }), flags: [] });
-      box.remove(); location.hash = `#/day/${key}`;
+      box.remove(); location.hash = `#day-${key}`;
     };
   }
 
   // ---------- Routing & events ----------
   function route() {
     const h = location.hash.replace(/^#\/?/, '');
-    if (h.startsWith('day/')) { view = { name: 'day', key: decodeURIComponent(h.slice(4)) }; const d = findDay(view.key); if (d) curYear = CY.yearOf(CY.parse(d.date)); }
+    if (h.startsWith('day-') || h.startsWith('day/')) { view = { name: 'day', key: decodeURIComponent(h.slice(4)) }; const d = findDay(view.key); if (d) curYear = CY.yearOf(CY.parse(d.date)); }
     else if (h === 'hymns') view = { name: 'hymns', q: view.q };
     else { view = { name: 'calendar' }; draft = null; }
     render();
@@ -376,8 +376,8 @@
     if (t.id === 'signin') store.signIn();
     if (t.id === 'signout') store.signOut();
     if (t.id === 'addSpecial') addSpecial();
-    if (t.id === 'jumpToday') { curYear = CY.yearOf(new Date()); location.hash = '#/'; render(); const n = $('#nextRow'); n && n.scrollIntoView({ block: 'center' }); }
-    if (t.dataset.view) location.hash = t.dataset.view === 'hymns' ? '#/hymns' : '#/';
+    if (t.id === 'jumpToday') { curYear = CY.yearOf(new Date()); location.hash = '#calendar'; render(); const n = $('#nextRow'); n && n.scrollIntoView({ block: 'center' }); }
+    if (t.dataset.view) location.hash = t.dataset.view === 'hymns' ? '#hymns' : '#calendar';
   });
   document.addEventListener('input', (e) => {
     const f = e.target.dataset.f;
