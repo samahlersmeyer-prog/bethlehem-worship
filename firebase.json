@@ -1,7 +1,18 @@
 {
-  "firestore": { "rules": "firestore.rules" },
+  "firestore": {
+    "rules": "firestore.rules"
+  },
   "hosting": {
     "public": ".",
-    "ignore": ["firebase.json", "firestore.rules", "tests/**", "tools/**", "dist/**", "**/.*", "README.md"]
+    "ignore": [
+      "firebase.json",
+      "firestore.rules",
+      "tests/**",
+      "tools/**",
+      "dist/**",
+      "**/.*",
+      "README.md",
+      ".github/**"
+    ]
   }
 }
