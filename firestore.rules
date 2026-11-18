@@ -6,8 +6,9 @@ service cloud.firestore {
     function team() {
       return request.auth != null && request.auth.token.email in [
         'ben.ahlersmeyer@gmail.com',
-        'sam.ahlersmeyer@gmail.com'
-        // Next: 'kaseyneedham92@gmail.com', Janelle
+        'sam.ahlersmeyer@gmail.com',
+        'kaseyneedham92@gmail.com'
+        // Next: Janelle
       ];
     }
     match /plans/{id} {
