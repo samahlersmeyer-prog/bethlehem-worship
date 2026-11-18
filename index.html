@@ -91,6 +91,10 @@
   .modal .card { width: min(420px, 92vw); }
   .linkrow { display: flex; gap: 8px; max-width: 440px; margin: 8px auto 0; }
   .linkrow button { white-space: nowrap; }
+  .moved { color: var(--warn); font-size: 12.5px; }
+  .row .what small.moved { color: var(--warn); }
+  .obsrow { padding: 10px 16px; } .obsrow .chips { align-items: center; }
+  .obsrow input.obsdate { width: auto; }
   p.or { color: var(--muted); font-size: 13px; margin: 16px 0 0; }
   #printsheet { display: none; }
   @media (max-width: 760px) {
@@ -123,11 +127,11 @@
   <nav class="tabs"><button data-view="calendar" class="on">Church Year</button><button data-view="hymns">Hymns</button></nav>
 </header>
 <main id="app"><p class="muted">Loading…</p></main>
-<script src="firebase-config.js?v=2"></script>
-<script src="js/lectionary.js?v=2"></script>
-<script src="js/calendar.js?v=2"></script>
-<script src="js/seed.js?v=2"></script>
-<script src="js/store.js?v=2"></script>
-<script src="js/app.js?v=2"></script>
+<script src="firebase-config.js?v=3"></script>
+<script src="js/lectionary.js?v=3"></script>
+<script src="js/calendar.js?v=3"></script>
+<script src="js/seed.js?v=3"></script>
+<script src="js/store.js?v=3"></script>
+<script src="js/app.js?v=3"></script>
 </body>
 </html>

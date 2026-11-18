@@ -11,6 +11,9 @@
     const d = CY.parse(isoDate); const sat = CY.add(d, -1);
     return `Sat ${MON[sat.getUTCMonth()]} ${sat.getUTCDate()} / Sun ${MON[d.getUTCMonth()]} ${d.getUTCDate()}`;
   };
+  // When a service is kept on a different day than the calendar date (e.g. Epiphany on Sunday)
+  const whenLabel = (isoDate) => CY.dow(CY.parse(isoDate)) === 0 ? weekend(isoDate) : fmt(isoDate);
+  const servedOn = (key, p) => (p && p.custom ? p.date : (p && p.observedDate) || key);
   const READ_LABELS = ['First Reading', 'Psalm', 'Epistle', 'Gospel'];
   const SETTINGS = ['Divine Service, Setting One', 'Divine Service, Setting Two', 'Divine Service, Setting Three',
     'Divine Service, Setting Four', 'Divine Service, Setting Five', 'Matins', 'Vespers', 'Morning Prayer',
@@ -89,7 +92,7 @@
   function hymnIndex() {
     const idx = {};
     for (const [k, p] of Object.entries(store.all())) {
-      const date = p.custom ? p.date : k;
+      const date = servedOn(k, p);
       for (const h of hymnsIn(p)) {
         const e = (idx[h.id] = idx[h.id] || { id: h.id, book: h.book, num: h.num, title: '', uses: [] });
         if (h.title && h.title.length > e.title.length) e.title = h.title;
@@ -161,7 +164,10 @@
     const plans = store.all();
     const customs = Object.entries(plans).filter(([, p]) => p.custom && p.date >= yr.start && p.date <= yr.end)
       .map(([k, p]) => ({ date: p.date, key: k, name: p.name, kind: 'custom', color: p.color || 'white', season: 'Special' }));
-    const rows = [...yr.days, ...customs].sort((a, b) => a.date.localeCompare(b.date));
+    const rows = [...yr.days, ...customs].map((d) => {
+      const key = d.kind === 'custom' ? d.key : d.date;
+      return Object.assign({}, d, { key, shown: servedOn(key, plans[key]) });
+    }).sort((a, b) => a.shown.localeCompare(b.shown) || (a.kind === 'sunday' ? -1 : 1));
     const today = CY.iso(new Date(Date.UTC(new Date().getFullYear(), new Date().getMonth(), new Date().getDate())));
     let html = `<div class="toolbar">${yearSwitcher()}
       <div class="yrinfo">Series ${yr.series} · ${fmtLong(yr.start)} – ${fmtLong(yr.end)} · Easter ${fmtLong(yr.easter)}</div>
@@ -172,19 +178,19 @@
     for (const d of rows) {
       const grp = d.kind === 'custom' ? season : d.season;
       if (grp !== season) { if (season) html += '</div>'; season = grp; html += `<h3 class="season">${esc(season)}</h3><div class="card list">`; }
-      const key = d.kind === 'custom' ? d.key : d.date;
+      const key = d.key;
       const p = plans[key];
       const pr = progress(p);
-      const isSun = CY.dow(CY.parse(d.date)) === 0;
-      const when = isSun ? weekend(d.date) : fmt(d.date);
+      const moved = d.kind !== 'custom' && d.shown !== d.date;
+      const when = whenLabel(d.shown);
       const gospel = d.readings ? d.readings[3] : '';
       const fest = (d.festivals || []).map((f) => f.name).join(' · ');
-      const isNext = !markedToday && d.date >= today;
+      const isNext = !markedToday && d.shown >= today;
       if (isNext) markedToday = true;
       html += `<a class="row ${d.kind !== 'sunday' ? 'feast' : ''} ${isNext ? 'next' : ''}" href="#day-${esc(key)}" ${isNext ? 'id="nextRow"' : ''}>
         <span class="swatch" style="background:${CY.COLORS[d.color] || '#ccc'}" title="${esc(d.color)}"></span>
         <span class="when">${esc(when)}</span>
-        <span class="what"><b>${esc(d.name)}</b>${fest ? `<small class="fest">${esc(fest)}</small>` : ''}
+        <span class="what"><b>${esc(d.name)}</b>${moved ? `<small class="moved">Observed · actual date ${esc(fmt(d.date))}</small>` : ''}${fest ? `<small class="fest">${esc(fest)}</small>` : ''}
           ${gospel ? `<small>${esc(gospel)}</small>` : ''}</span>
         <span class="sermon">${p && p.sermonTitle ? `“${esc(p.sermonTitle)}”` : ''}</span>
         <span class="status">${p ? `${p.flags && p.flags.length ? '<i class="flag" title="Needs a look">!</i>' : ''}<span class="meter"><span style="width:${pr.total ? (100 * pr.done / pr.total) : 0}%"></span></span>` : '<span class="muted">not started</span>'}</span>
@@ -210,9 +216,21 @@
       <div class="crumbs"><a href="#calendar">← ${esc(yearData(CY.yearOf(CY.parse(day.date))).label)} calendar</a>
         <span class="grow"></span>${nav.prev ? `<a href="#day-${nav.prev}">‹ Prev</a>` : ''} ${nav.next ? `<a href="#day-${nav.next}">Next ›</a>` : ''}</div>
       <h2>${esc(obs ? obs.name : day.name)}</h2>
-      <div class="meta">${esc(isSun ? weekend(day.date) : fmtLong(day.date))}${day.series ? ` · Series ${day.series}` : ''}${day.proper && day.proper < 29 ? ` · Proper ${day.proper}` : ''} · <span class="colorname">${esc(obs ? obs.color : day.color)}</span></div>
+      <div class="meta">${esc(whenLabel(servedOn(key, p)))}${p.observedDate && p.observedDate !== day.date ? ` <span class="moved">(observed · actual ${esc(fmt(day.date))})</span>` : ''}${day.series ? ` · Series ${day.series}` : ''}${day.proper && day.proper < 29 ? ` · Proper ${day.proper}` : ''} · <span class="colorname">${esc(obs ? obs.color : day.color)}</span></div>
       ${!saved ? '<div class="hint">Not started — defaults filled in below. Changes save automatically.</div>' : ''}
     </div>`;
+
+    if (day.kind !== 'custom') {
+      const d0 = CY.parse(day.date), dw = CY.dow(d0);
+      const before = CY.iso(CY.add(d0, dw === 0 ? -7 : -dw)), after = CY.iso(CY.add(d0, dw === 0 ? 7 : 7 - dw));
+      const cur = p.observedDate || day.date;
+      h += `<div class="card pad obsrow"><label class="lbl">Kept on</label><div class="chips">
+        <button class="chip ${cur === day.date ? 'on' : ''}" data-act="obsDate" data-d="${day.date}" ${ro}>Actual date · ${esc(fmt(day.date))}</button>
+        <button class="chip ${cur === before ? 'on' : ''}" data-act="obsDate" data-d="${before}" ${ro}>Sunday before · ${esc(fmt(before))}</button>
+        <button class="chip ${cur === after ? 'on' : ''}" data-act="obsDate" data-d="${after}" ${ro}>Sunday after · ${esc(fmt(after))}</button>
+        <input type="date" class="obsdate" data-act-change="obsDate" value="${esc(cur)}" ${ro} title="Pick another date">
+      </div></div>`;
+    }
 
     if (p.flags && p.flags.length) {
       h += `<div class="card flags"><b>Needs a look</b>${p.flags.map((f, i) => `<div class="flagrow"><span>${esc(f)}</span>${store.canEdit ? `<button class="link" data-act="dismissFlag" data-i="${i}">Resolved</button>` : ''}</div>`).join('')}</div>`;
@@ -296,7 +314,7 @@
     const w = document.createElement('div');
     w.id = 'printsheet';
     w.innerHTML = `<h1>${esc(obs ? obs.name : day.name)}</h1>
-      <p>${esc(day.kind === 'sunday' ? weekend(day.date) : fmtLong(day.date))} · ${esc(p.setting)}${day.series ? ` · Series ${day.series}` : ''} · ${esc(obs ? obs.color : day.color)}</p>
+      <p>${esc(whenLabel(servedOn(key, p)))}${p.observedDate && p.observedDate !== day.date ? ` (observed; actual ${esc(fmt(day.date))})` : ''} · ${esc(p.setting)}${day.series ? ` · Series ${day.series}` : ''} · ${esc(obs ? obs.color : day.color)}</p>
       ${p.sermonTitle ? `<p><b>Sermon:</b> “${esc(p.sermonTitle)}”${p.preacher ? ` — ${esc(p.preacher)}` : ''}</p>` : ''}
       ${readings ? `<p>${READ_LABELS.map((l, i) => `<b>${l}:</b> ${esc(readings[i])}`).join('<br>')}</p>` : ''}
       <table>${(p.slots || []).map((s) => `<tr><td>${esc(s.label)}</td><td>${esc(s.value)}</td><td>${esc(s.note)}</td></tr>`).join('')}</table>
@@ -332,6 +350,7 @@
     const i = +el.dataset.i;
     const day = view.name === 'day' ? findDay(view.key) : null;
     switch (act) {
+      case 'obsDate': draft.observedDate = el.dataset.d === day.date ? null : el.dataset.d; return queueSave(true);
       case 'observe': draft.observe = el.dataset.k || null; return queueSave(true);
       case 'dismissFlag': draft.flags.splice(i, 1); return queueSave(true);
       case 'editReadings': draft.readingsOverride = [...(day.readings || ['', '', '', ''])]; return queueSave(true);
@@ -406,6 +425,10 @@
   document.addEventListener('change', (e) => {
     if (e.target.id === 'yearSel') { curYear = +e.target.value; render(); }
     if (e.target.dataset.f === 'setting' && draft) render();
+    if (e.target.classList.contains('obsdate') && draft && e.target.value) {
+      const day = findDay(view.key);
+      draft.observedDate = e.target.value === day.date ? null : e.target.value; queueSave(true);
+    }
   });
 
   // ---------- Boot ----------
