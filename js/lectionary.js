@@ -3,6 +3,7 @@
  *
  * Source: LCMS Commission on Worship church-year calendars
  *   2026–27 Series B, 2024–25 Series C, 2025–26 Series A (files.lcms.org).
+ * Feasts and festivals: LSB readings as listed by the Wartburg Project (LSB occasions).
  * Entries marked `verify: true` were not printed in those three calendars
  * (the day did not fall in that year) and were filled from LSB; confirm
  * against the LSB pew edition (pp. xiv–xix) before printing a bulletin.
@@ -57,7 +58,7 @@
     epiphany4: {
       A: R('Micah 6:1–8 | Psalm 15 | 1 Cor. 1:18–31 | Matt. 5:1–12'),
       B: R('Deut. 18:15–20 | Psalm 111 | 1 Cor. 8:1–13 | Mark 1:21–28'),
-      C: { r: R('Jer. 1:4–10 (17–19) | Psalm 71:1–6 (7–11) | 1 Cor. 12:31b–13:13 | Luke 4:31–44'), verify: true },
+      C: R('Jer. 1:4–10 (17–19) | Psalm 71:1–6 (7–11) | 1 Cor. 12:31b–13:13 | Luke 4:31–44'),
     },
     epiphany5: {
       A: R('Isaiah 58:3–9a | Psalm 112:1–9 | 1 Cor. 2:1–12 (13–16) | Matt. 5:13–20'),
@@ -166,7 +167,7 @@
       C: R('Prov. 8:1–4, 22–31 | Psalm 8 | Acts 2:14a, 22–36 | John 8:48–59'),
     },
     proper4: {
-      A: { r: R('Deut. 11:18–21, 26–28 | Psalm 4 | Rom. 3:21–28 | Matt. 7:15–29'), verify: true },
+      A: { r: R('Deut. 11:18–21, 26–28 | Psalm 4 | Rom. 3:21–28 | Matt. 7:(15–20) 21–29'), verify: true },
       B: R('Deut. 5:12–15 | Psalm 81:1–10 | 2 Cor. 4:5–12 | Mark 2:23–28 (3:1–6)'),
     },
     proper5: {
@@ -274,7 +275,7 @@
       C: R('Gen. 4:1–15 | Psalm 5 | 2 Tim. 4:6–8, 16–18 | Luke 18:9–17'),
     },
     proper26: {
-      A: { r: R('Micah 3:5–12 | Psalm 43 | 1 Thess. 2:9–13 | Matt. 23:1–12'), verify: true },
+      A: R('Micah 3:5–12 | Psalm 43 | 1 Thess. 4:1–12 | Matt. 23:1–12'),
       B: { r: R('Deut. 6:1–9 | Psalm 119:1–8 | Heb. 9:11–14 (15–22) | Mark 12:28–37'), verify: true },
       C: R('Isaiah 1:10–18 | Psalm 130 | 2 Thess. 1:1–5 (6–10) 11–12 | Luke 19:1–10'),
     },
@@ -327,6 +328,21 @@
     stMatthew: R('Ezek. 2:8–3:11 | Psalm 119:33–40 | Eph. 4:7–16 | Matt. 9:9–13'),
     michael: R('Dan. 10:10–14; 12:1–3 | Psalm 91 | Rev. 12:7–12 | Matt. 18:1–11 or Luke 10:17–20'),
     stLuke: R('Isaiah 35:5–8 | Psalm 147:1–11 | 2 Tim. 4:5–18 | Luke 10:1–9'),
+    // Psalms for these are in the LSB Altar Book
+    andrew: R('Ezek. 3:16–21 | see LSB | Rom. 10:8b–18 | John 1:35–42a'),
+    thomas: R('Judges 6:36–40 | see LSB | Eph. 4:7, 11–16 | John 20:24–29'),
+    stephen: R('2 Chron. 24:17–22 | see LSB | Acts 6:8–7:2a, 51–60 | Matt. 23:34–39'),
+    titus: R('Acts 20:28–35 | see LSB | Titus 1:1–9 | Luke 10:1–9'),
+    matthias: R('Isaiah 66:1–2 | see LSB | Acts 1:15–26 | Matt. 11:25–30'),
+    joseph: R('2 Sam. 7:4–16 | see LSB | Rom. 4:13–18 | Matt. 2:13–15, 19–23'),
+    annunciation: R('Isaiah 7:10–14 | see LSB | Heb. 10:4–10 | Luke 1:26–38'),
+    philipJames: R('Isaiah 30:18–21 | see LSB | Eph. 2:19–22 | John 14:1–14'),
+    visitation: R('Isaiah 11:1–5 | see LSB | Rom. 12:9–16 | Luke 1:39–45 (46–56)'),
+    barnabas: R('Isaiah 42:5–12 | see LSB | Acts 11:19–30; 13:1–3 | Mark 6:7–13'),
+    nativityJohn: R('Isaiah 40:1–5 | see LSB | Acts 13:13–26 | Luke 1:57–80'),
+    maryMagdalene: R('Prov. 31:10–31 | see LSB | Acts 13:26–31 | John 20:1–2, 10–18'),
+    jamesJerusalem: R('Acts 15:12–22a | see LSB | James 1:1–12 | Matt. 13:54–58'),
+    simonJude: R('Jer. 26:1–16 | see LSB | 1 Peter 1:3–9 | John 15:(12–16) 17–21'),
   };
 
   // Fixed-date feasts that can displace or sit alongside a Sunday.
@@ -340,12 +356,15 @@
     [1, 18, 'confessionPeter', 'The Confession of St. Peter', 'white'],
     [1, 24, 'timothy', 'St. Timothy, Pastor and Confessor', 'white'],
     [1, 25, 'conversionPaul', 'The Conversion of St. Paul', 'white'],
+    [1, 26, 'titus', 'St. Titus, Pastor and Confessor', 'white'],
     [2, 2, 'presentation', 'The Purification of Mary and the Presentation of Our Lord', 'white'],
     [2, 24, 'matthias', 'St. Matthias, Apostle', 'red'],
+    [3, 19, 'joseph', 'St. Joseph, Guardian of Jesus', 'white'],
     [3, 25, 'annunciation', 'The Annunciation of Our Lord', 'white'],
     [4, 25, 'stMark', 'St. Mark, Evangelist', 'red'],
     [5, 1, 'philipJames', 'St. Philip and St. James, Apostles', 'red'],
     [5, 31, 'visitation', 'The Visitation', 'white'],
+    [6, 11, 'barnabas', 'St. Barnabas, Apostle', 'red'],
     [6, 24, 'nativityJohn', 'The Nativity of St. John the Baptist', 'white'],
     [6, 29, 'peterPaul', 'St. Peter and St. Paul, Apostles', 'red'],
     [7, 22, 'maryMagdalene', 'St. Mary Magdalene', 'white'],

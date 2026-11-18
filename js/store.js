@@ -92,6 +92,7 @@
       if (unsub) { unsub(); unsub = null; }
       plans = {};
       if (u) {
+        fs.getDoc(fs.doc(db, 'config', 'feed')).then((d) => { if (d.exists()) { store.feed = d.data().url; subs.forEach((f) => f(plans)); } }).catch(() => {});
         let first = true;
         unsub = fs.onSnapshot(col, (snap) => {
           if (first && snap.empty) { first = false; store.importSeed(); return; } // first sign-in: load Ben's sheet

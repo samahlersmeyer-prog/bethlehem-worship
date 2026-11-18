@@ -19,6 +19,9 @@
     'Divine Service, Setting Four', 'Divine Service, Setting Five', 'Matins', 'Vespers', 'Morning Prayer',
     'Evening Prayer', 'Service of Prayer and Preaching', 'Other'];
 
+  const ADMINS = ['ben.ahlersmeyer@gmail.com', 'sam.ahlersmeyer@gmail.com'];
+  const ROLES = ['Lector', 'Acolyte', 'Communion Assistant', 'Elder on Duty', 'Usher', 'Altar Guild'];
+  const HY = window.HYMNS;
   let store, years = {}, curYear, view = { name: 'calendar' }, saveTimer = null, draft = null, pending = false;
 
   // ---------- Church year data ----------
@@ -67,10 +70,14 @@
   function newPlan(day) {
     const setting = (day.season === 'Advent') ? 'Divine Service, Setting Four' : 'Divine Service, Setting Three';
     const isSun = CY.dow(CY.parse(day.date)) === 0;
+    const slots = defaultSlots(setting, day);
+    const hd = HY.hotd(day.key, day.series || 'A')[0];
+    const sh = slots.find((x) => x.label === 'Sermon Hymn');
+    if (hd && sh && !sh.value) { sh.value = `LSB ${hd.n} "${hd.title}"`; sh.note = 'Hymn of the Day'; }
     return {
       setting,
       services: isSun ? [{ label: 'Saturday 4:00 pm', musician: '' }, { label: 'Sunday 9:00 am', musician: '' }] : [{ label: 'Service', musician: '' }],
-      slots: defaultSlots(setting, day), sermonTitle: '', preacher: '', sermonNotes: '', notes: '', flags: [],
+      slots, sermonTitle: '', preacher: '', sermonNotes: '', notes: '', flags: [],
     };
   }
 
@@ -108,6 +115,34 @@
     return e.uses.filter((u) => u.key !== key && Math.abs(CY.parse(u.date).getTime() - t) <= 42 * 864e5);
   }
 
+  // Titles the team has already typed win over the index's guess
+  function usedTitles() { const m = {}; for (const e of Object.values(hymnIndex())) if (e.title) m[e.id] = e.title; return m; }
+  function expandHymn(v) {
+    const m = String(v || '').match(/^\s*(LSB|TFBF)?\s*#?\s*(\d{1,4})\s*$/i);
+    if (!m) return v;
+    const book = (m[1] || 'LSB').toUpperCase(), n = m[2], id = `${book} ${n}`;
+    const t = usedTitles()[id] || (book === 'LSB' ? HY.titleFor(n) : '');
+    return t ? `${id} "${t}"` : id;
+  }
+  let _dl = null;
+  function hymnDatalist(idx) {
+    if (_dl && _dl.n === Object.keys(idx).length) return _dl.html;
+    const seen = new Set(); const opts = [];
+    for (const e of Object.values(idx)) { const v = `${e.id}${e.title ? ` "${e.title}"` : ''}`; if (!seen.has(v)) { seen.add(v); opts.push(v); } }
+    for (const [n, ts] of Object.entries(HY.LSB)) for (const t of new Set([HY.titleFor(n), ...ts])) { const v = `LSB ${n} "${t}"`; if (t && !seen.has(v)) { seen.add(v); opts.push(v); } }
+    _dl = { n: Object.keys(idx).length, html: `<datalist id="hymnlist">${opts.map((v) => `<option value="${esc(v)}">`).join('')}</datalist>` };
+    return _dl.html;
+  }
+  const isAdmin = () => store.mode === 'local' || (store.user && ADMINS.includes((store.user.email || '').toLowerCase()));
+  // Same occasion in the last cycle (3 years earlier)
+  function lastCycle(day) {
+    if (!day || day.kind === 'custom') return null;
+    const y = CY.yearOf(CY.parse(day.date)) - 3;
+    const prev = yearData(y).days.find((d) => d.key === day.key);
+    const p = prev && store.get(prev.date);
+    return p ? { date: prev.date, plan: p, label: yearData(y).label } : null;
+  }
+
   // ---------- Rendering ----------
   function render() {
     const app = $('#app');
@@ -119,6 +154,8 @@
     document.querySelectorAll('nav.tabs button').forEach((b) => b.classList.toggle('on', b.dataset.view === view.name || (view.name === 'day' && b.dataset.view === 'calendar')));
     if (view.name === 'day') app.innerHTML = dayView(view.key);
     else if (view.name === 'hymns') app.innerHTML = hymnsView();
+    else if (view.name === 'series') app.innerHTML = seriesView();
+    else if (view.name === 'reports') app.innerHTML = reportsView();
     else app.innerHTML = calendarView();
   }
 
@@ -173,6 +210,7 @@
       <div class="yrinfo">Series ${yr.series} · ${fmtLong(yr.start)} – ${fmtLong(yr.end)} · Easter ${fmtLong(yr.easter)}</div>
       <span class="grow"></span>
       <button id="jumpToday">Today</button>
+      <button id="addMidweek">+ Midweek series</button>
       <button id="addSpecial">+ Special service</button></div>`;
     let season = null, markedToday = false;
     for (const d of rows) {
@@ -193,7 +231,7 @@
         <span class="what"><b>${esc(d.name)}</b>${moved ? `<small class="moved">Observed · actual date ${esc(fmt(d.date))}</small>` : ''}${fest ? `<small class="fest">${esc(fest)}</small>` : ''}
           ${gospel ? `<small>${esc(gospel)}</small>` : ''}</span>
         <span class="sermon">${p && p.sermonTitle ? `“${esc(p.sermonTitle)}”` : ''}</span>
-        <span class="status">${p ? `${p.flags && p.flags.length ? '<i class="flag" title="Needs a look">!</i>' : ''}<span class="meter"><span style="width:${pr.total ? (100 * pr.done / pr.total) : 0}%"></span></span>` : '<span class="muted">not started</span>'}</span>
+        <span class="status">${p && p.locked ? '<i class="lock" title="Final">🔒</i>' : ''}${p ? `${p.flags && p.flags.length ? '<i class="flag" title="Needs a look">!</i>' : ''}<span class="meter"><span style="width:${pr.total ? (100 * pr.done / pr.total) : 0}%"></span></span>` : '<span class="muted">not started</span>'}</span>
       </a>`;
     }
     return html + '</div>';
@@ -205,8 +243,9 @@
     const saved = store.get(key);
     if (!draft || draft.__key !== key) draft = Object.assign({ __key: key }, JSON.parse(JSON.stringify(saved || newPlan(day))));
     const p = draft;
+    p.volunteers = p.volunteers || {};
     const isSun = day.kind === 'sunday';
-    const ro = store.canEdit ? '' : 'disabled';
+    const ro = store.canEdit && !p.locked ? '' : 'disabled';
     const idx = hymnIndex();
     const obs = p.observe && (day.festivals || []).find((f) => f.key === p.observe);
     const readings = p.readingsOverride || (obs && obs.readings && obs.readings.r) || day.readings;
@@ -219,6 +258,10 @@
       <div class="meta">${esc(whenLabel(servedOn(key, p)))}${p.observedDate && p.observedDate !== day.date ? ` <span class="moved">(observed · actual ${esc(fmt(day.date))})</span>` : ''}${day.series ? ` · Series ${day.series}` : ''}${day.proper && day.proper < 29 ? ` · Proper ${day.proper}` : ''} · <span class="colorname">${esc(obs ? obs.color : day.color)}</span></div>
       ${!saved ? '<div class="hint">Not started — defaults filled in below. Changes save automatically.</div>' : ''}
     </div>`;
+    if (p.locked) {
+      h += `<div class="card lockbar"><span>🔒 Final — locked by ${esc(p.locked.by || '')} on ${esc(new Date(p.locked.at).toLocaleDateString())}. No changes after the bulletin is printed.</span>
+        ${isAdmin() ? '<button data-act="unlock">Unlock</button>' : '<span class="muted">Ask Pastor Ben or Sam to unlock.</span>'}</div>`;
+    }
 
     if (day.kind !== 'custom') {
       const d0 = CY.parse(day.date), dw = CY.dow(d0);
@@ -252,41 +295,61 @@
         : `<div class="rd"><span>${l}</span><b>${esc(readings[i])}</b></div>`).join('');
       if (day.altReadings) h += day.altReadings.filter((a) => a.readings).map((a) => `<details><summary>${esc(a.name)} readings</summary>${a.readings.map((r, i) => `<div class="rd"><span>${READ_LABELS[i]}</span>${esc(r)}</div>`).join('')}</details>`).join('');
     } else h += `<p class="muted">Choose readings for this service.</p>`;
+    const hds = HY.hotd(obs ? obs.key : day.key, day.series || 'A');
+    if (hds.length) {
+      h += `<div class="hotd"><span class="lbl">Hymn of the Day (LSB)</span>${hds.map((x, i) => `<div><b>${esc(x.n)}</b> ${esc(x.title)}${i ? ' <span class="muted">(also listed)</span>' : ''}
+        ${store.canEdit && !p.locked ? `<button class="link" data-act="useHotd" data-n="${esc(x.n)}">Use as Sermon Hymn</button>` : ''}</div>`).join('')}</div>`;
+    }
     if (day.notes && day.notes.length) h += `<ul class="lnotes">${day.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>`;
+    const lc = lastCycle(day);
+    if (lc) {
+      const hy = hymnsIn(lc.plan).map((x) => x.id + (x.title ? ' ' + x.title : '')).join('; ');
+      h += `<details class="lastcycle"><summary>Last time (Series ${esc(day.series)}, ${esc(fmtLong(lc.date))})</summary>
+        ${lc.plan.sermonTitle ? `<div>Sermon: “${esc(lc.plan.sermonTitle)}”${lc.plan.preacher ? ' — ' + esc(lc.plan.preacher) : ''}</div>` : ''}
+        <div class="muted">${esc(hy || 'No hymns recorded')}</div></details>`;
+    }
     h += `</div>`;
 
     // Sermon & services
     h += `<div class="card pad"><b>Sermon</b>
       <label class="fld"><span>Title</span><input data-f="sermonTitle" value="${esc(p.sermonTitle)}" ${ro}></label>
+      <label class="fld"><span>Sermon series</span><input data-f="series" value="${esc(p.series || '')}" placeholder="e.g. The Light of Christ" list="serieslist" ${ro}></label>
       <label class="fld"><span>Preacher</span><input data-f="preacher" value="${esc(p.preacher)}" placeholder="Pastor Ben" ${ro}></label>
       <label class="fld"><span>Text & notes</span><textarea data-f="sermonNotes" rows="2" ${ro}>${esc(p.sermonNotes)}</textarea></label>
       <label class="fld"><span>Setting</span><select data-f="setting" ${ro}>${SETTINGS.map((s) => `<option ${s === p.setting ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select></label>
       <b class="sub">Services & musicians</b>
-      ${(p.services || []).map((s, i) => `<div class="svc"><input data-f="services.${i}.label" value="${esc(s.label)}" ${ro}><input data-f="services.${i}.musician" value="${esc(s.musician)}" placeholder="Musician" ${ro}>${store.canEdit ? `<button class="icon" data-act="delSvc" data-i="${i}" title="Remove">×</button>` : ''}</div>`).join('')}
-      ${store.canEdit ? '<button class="link" data-act="addSvc">+ Add service time</button>' : ''}
+      ${(p.services || []).map((s, i) => `<div class="svc"><input data-f="services.${i}.label" value="${esc(s.label)}" ${ro}><input data-f="services.${i}.musician" value="${esc(s.musician)}" placeholder="Musician" ${ro}>${store.canEdit && !p.locked ? `<button class="icon" data-act="delSvc" data-i="${i}" title="Remove">×</button>` : ''}</div>`).join('')}
+      ${store.canEdit && !p.locked ? '<button class="link" data-act="addSvc">+ Add service time</button>' : ''}
     </div></div>`;
 
     // Order of service
     h += `<div class="card pad"><div class="cardhead"><b>Order of service</b>
-      ${store.canEdit ? `<span class="grow"></span><button class="link" data-act="resetSlots">Reset to ${esc(p.setting.replace('Divine Service, ', ''))} defaults</button>` : ''}</div>
+      ${store.canEdit && !p.locked ? `<span class="grow"></span>${copyFromSelect(key, day)}<button class="link" data-act="resetSlots">Reset to ${esc(p.setting.replace('Divine Service, ', ''))} defaults</button>` : ''}</div>
       <div class="slots">`;
     (p.slots || []).forEach((s, i) => {
-      const warn = hymnsIn({ slots: [s] }).flatMap((hm) => nearbyUses(key, day.date, hm.id, idx).map((u) => `${hm.id} also ${fmt(u.date)} (${u.slot})`));
+      const warn = hymnsIn({ slots: [s] }).flatMap((hm) => nearbyUses(key, day.date, hm.id, idx).filter((u) => /hymn/i.test(s.label) || u.slot !== s.label).map((u) => `${hm.id} also ${fmt(u.date)} (${u.slot})`));
       h += `<div class="slot">
         <input class="sl" data-f="slots.${i}.label" value="${esc(s.label)}" ${ro}>
         <input class="sv" data-f="slots.${i}.value" value="${esc(s.value)}" list="hymnlist" placeholder="${/Reading/.test(s.label) ? 'from readings' : ''}" ${ro}>
         <input class="sn" data-f="slots.${i}.note" value="${esc(s.note)}" placeholder="note" ${ro}>
-        ${store.canEdit ? `<span class="ops"><button class="icon" data-act="up" data-i="${i}" title="Move up">↑</button><button class="icon" data-act="down" data-i="${i}" title="Move down">↓</button><button class="icon" data-act="delSlot" data-i="${i}" title="Remove">×</button></span>` : ''}
+        ${store.canEdit && !p.locked ? `<span class="ops"><button class="icon" data-act="up" data-i="${i}" title="Move up">↑</button><button class="icon" data-act="down" data-i="${i}" title="Move down">↓</button><button class="icon" data-act="delSlot" data-i="${i}" title="Remove">×</button></span>` : ''}
         ${warn.length ? `<div class="warn">${esc(warn.join(' · '))}</div>` : ''}
       </div>`;
     });
-    h += `</div>${store.canEdit ? '<button class="link" data-act="addSlot">+ Add line</button>' : ''}
-      <datalist id="hymnlist">${Object.values(idx).map((e) => `<option value="${esc(e.id + (e.title ? ` "${e.title}"` : ''))}">`).join('')}</datalist></div>`;
+    h += `</div>${store.canEdit && !p.locked ? '<button class="link" data-act="addSlot">+ Add line</button>' : ''}
+      ${hymnDatalist(idx)}<datalist id="serieslist">${[...new Set(Object.values(store.all()).map((x) => x.series).filter(Boolean))].map((x) => `<option value="${esc(x)}">`).join('')}</datalist></div>`;
+
+    // Volunteers
+    const svcs = (p.services || []).length ? p.services : [{ label: 'Service' }];
+    h += `<div class="card pad"><b>Volunteers</b><table class="vol"><tr><th></th>${svcs.map((x) => `<th>${esc(x.label)}</th>`).join('')}</tr>
+      ${ROLES.map((r) => `<tr><td>${esc(r)}</td>${svcs.map((x, i) => `<td><input data-vol="${esc(r)}" data-i="${i}" value="${esc((p.volunteers[r] || [])[i] || '')}" ${ro}></td>`).join('')}</tr>`).join('')}</table></div>`;
 
     h += `<div class="card pad"><label class="fld"><span>Notes for the team</span><textarea data-f="notes" rows="3" ${ro}>${esc(p.notes)}</textarea></label>
       <div class="foot"><span id="savestate" class="muted">${saved && saved.updatedAt ? `Saved ${new Date(saved.updatedAt).toLocaleString()}${saved.updatedBy && saved.updatedBy !== 'preview' ? ' by ' + esc(saved.updatedBy) : ''}` : ''}</span>
-      <span class="grow"></span><button data-act="print">Print / PDF</button>
-      ${store.canEdit && day.kind === 'custom' ? '<button class="danger" data-act="delCustom">Delete service</button>' : ''}</div></div>`;
+      <span class="grow"></span><button data-act="print">Print / PDF</button><button data-act="bulletin">Bulletin (.docx)</button>
+      ${store.canEdit && saved && !p.locked ? '<button class="primary" data-act="lock">Mark final 🔒</button>' : ''}
+      ${store.canEdit && !p.locked && day.kind === 'custom' ? '<button class="danger" data-act="delCustom">Delete service</button>' : ''}</div>
+      ${p.history && p.history.length ? `<details class="history"><summary>Change history (${p.history.length})</summary>${p.history.slice().reverse().map((x) => `<div><span class="muted">${esc(new Date(x.at).toLocaleString())}</span> · ${esc(x.by || '')} · ${esc(x.what)}</div>`).join('')}</details>` : ''}</div>`;
     return h;
   }
 
@@ -306,6 +369,163 @@
       <span class="uses">${e.uses.map((u) => `<a href="#day-${esc(u.key)}" title="${esc(u.slot)}">${esc(fmtLong(u.date))}</a>`).join(' ')}</span></div>`).join('') || '<div class="pad muted">No hymns yet.</div>'}</div>`;
   }
 
+  function copyFromSelect(key, day) {
+    const lc = lastCycle(day);
+    const others = Object.entries(store.all()).filter(([k, x]) => k !== key && x.slots && x.slots.length)
+      .map(([k, x]) => ({ k, date: servedOn(k, x), name: x.custom ? x.name : ((findDay(k) || {}).name || k) }))
+      .sort((a, b) => b.date.localeCompare(a.date)).slice(0, 60);
+    return `<select class="copyfrom" title="Copy the order of service from another service"><option value="">Copy order from…</option>
+      ${lc ? `<option value="${esc(lc.date)}">Last cycle: ${esc(fmtLong(lc.date))}</option>` : ''}
+      ${others.map((o) => `<option value="${esc(o.k)}">${esc(fmt(o.date))} — ${esc(o.name)}</option>`).join('')}</select>`;
+  }
+
+  // Sermon-series planner: a season side by side
+  function seriesView() {
+    const yr = yearData(curYear); const plans = store.all();
+    const seasons = [...new Set(yr.days.map((d) => d.season))];
+    const season = seasons.includes(view.season) ? view.season : (yr.days.find((d) => d.date >= CY.iso(new Date())) || yr.days[0]).season;
+    const days = yr.days.filter((d) => d.season === season && (d.kind === 'sunday' || plans[d.date]));
+    return `<div class="toolbar">${yearSwitcher()}<select id="seasonSel">${seasons.map((x) => `<option ${x === season ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>
+      <span class="grow"></span><span class="muted">Plan a sermon series across the season. Edits save as you type.</span></div>
+      <div class="card"><table class="series"><tr><th>Weekend</th><th>Texts</th><th>Series</th><th>Sermon title</th><th>Notes</th></tr>
+      ${days.map((d) => { const p = plans[d.date] || {}; const r = d.readings || []; const lk = p.locked ? 'disabled' : '';
+        return `<tr><td><a href="#day-${d.date}"><b>${esc(d.name)}</b></a><br><span class="muted">${esc(whenLabel(servedOn(d.date, p)))}</span></td>
+        <td class="tx">${esc(r[0] || '')}<br>${esc(r[2] || '')}<br><b>${esc(r[3] || '')}</b></td>
+        <td><input data-sk="${d.date}" data-sf="series" value="${esc(p.series || '')}" list="serieslist" ${lk}></td>
+        <td><input data-sk="${d.date}" data-sf="sermonTitle" value="${esc(p.sermonTitle || '')}" ${lk}></td>
+        <td><textarea data-sk="${d.date}" data-sf="sermonNotes" rows="2" ${lk}>${esc(p.sermonNotes || '')}</textarea></td></tr>`; }).join('')}
+      </table></div><datalist id="serieslist">${[...new Set(Object.values(plans).map((x) => x.series).filter(Boolean))].map((x) => `<option value="${esc(x)}">`).join('')}</datalist>`;
+  }
+  const seriesTimers = {};
+  function saveSeriesField(k, f, v) {
+    clearTimeout(seriesTimers[k + f]);
+    seriesTimers[k + f] = setTimeout(async () => {
+      const day = findDay(k); const base = store.get(k) || newPlan(day);
+      const plan = Object.assign({}, JSON.parse(JSON.stringify(base)), { [f]: v });
+      plan.history = addHistory(base, plan);
+      await store.save(k, plan);
+    }, 700);
+  }
+
+  // Song usage report (OneLicense / CCLI) and calendar feed
+  function reportsView() {
+    const yr = yearData(curYear);
+    const from = view.from || yr.start, to = view.to || yr.end;
+    const rows = [];
+    for (const [k, p] of Object.entries(store.all())) {
+      const date = servedOn(k, p); if (date < from || date > to) continue;
+      const nSvc = (p.services || []).length || 1;
+      for (const h of hymnsIn(p)) rows.push({ date, id: h.id, book: h.book, num: h.num, title: h.title || (h.book === 'LSB' ? HY.titleFor(String(h.num)) : ''), slot: h.slot, services: nSvc });
+      for (const s of p.slots || []) if (s.value && /©|copyright/i.test(s.note || '')) rows.push({ date, id: '—', book: '', num: '', title: s.value, slot: s.label, services: nSvc, note: s.note });
+    }
+    rows.sort((a, b) => a.date.localeCompare(b.date));
+    view.reportRows = rows;
+    const totals = {}; rows.forEach((r) => { const t = (totals[r.id + r.title] = totals[r.id + r.title] || { id: r.id, title: r.title, uses: 0, services: 0 }); t.uses++; t.services += r.services; });
+    const feed = store.feed;
+    return `<div class="toolbar"><label>From <input type="date" id="repFrom" value="${esc(from)}"></label><label>To <input type="date" id="repTo" value="${esc(to)}"></label>
+      <span class="grow"></span><button id="csv">Download CSV</button></div>
+      <div class="card pad"><b>Calendar feed</b><p class="muted">Subscribe in Google Calendar, Apple Calendar or Outlook to see every service with its hymns. Updates nightly.</p>
+      ${feed ? `<div class="linkrow wide"><input readonly value="${esc(feed)}" id="feedUrl"><button id="copyFeed">Copy link</button></div>` : '<p class="muted">The feed link appears here after the first nightly update.</p>'}</div>
+      <div class="card pad"><b>Song usage — ${rows.length} uses, ${Object.keys(totals).length} songs</b>
+      <p class="muted">For OneLicense / CCLI reporting. Each use counts once per service time that weekend.</p>
+      <table class="report"><tr><th>Song</th><th>Uses</th><th>Services</th></tr>${Object.values(totals).sort((a, b) => b.services - a.services).map((t) => `<tr><td>${esc(t.id)} ${esc(t.title)}</td><td>${t.uses}</td><td>${t.services}</td></tr>`).join('')}</table>
+      <details><summary>Every use</summary><table class="report"><tr><th>Date</th><th>Song</th><th>Where</th><th>Services</th></tr>
+      ${rows.map((r) => `<tr><td>${esc(fmtLong(r.date))}</td><td>${esc(r.id)} ${esc(r.title)}</td><td>${esc(r.slot)}</td><td>${r.services}</td></tr>`).join('')}</table></details></div>`;
+  }
+  function downloadCSV() {
+    const q = (x) => `"${String(x ?? '').replace(/"/g, '""')}"`;
+    const csv = ['Date,Hymnal,Number,Title,Where,Services', ...(view.reportRows || []).map((r) => [r.date, r.book, r.num, r.title, r.slot, r.services].map(q).join(','))].join('\n');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    a.download = `bethlehem-song-usage-${view.from || ''}-${view.to || ''}.csv`; document.body.appendChild(a); a.click(); a.remove();
+  }
+
+  // Midweek series (Advent / Lent)
+  function addMidweek() {
+    const yr = yearData(curYear);
+    const box = document.createElement('div'); box.className = 'modal';
+    box.innerHTML = `<div class="card pad"><b>Add a midweek series — ${esc(yr.label)}</b>
+      <label class="fld"><span>Season</span><select id="mwSeason"><option>Advent</option><option selected>Lent</option></select></label>
+      <label class="fld"><span>Day</span><select id="mwDay">${WD.map((d, i) => `<option value="${i}" ${i === 3 ? 'selected' : ''}>${d}</option>`).join('')}</select></label>
+      <label class="fld"><span>Time</span><input id="mwTime" value="7:00 pm"></label>
+      <label class="fld"><span>Order</span><select id="mwSetting">${SETTINGS.map((x) => `<option ${x === 'Evening Prayer' ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
+      <p class="muted" id="mwPreview"></p>
+      <div class="foot"><span class="grow"></span><button id="mwCancel">Cancel</button><button class="primary" id="mwOk">Add services</button></div></div>`;
+    document.body.appendChild(box);
+    const dates = () => {
+      const season = $('#mwSeason', box).value, wd = +$('#mwDay', box).value, out = [];
+      const k = (key) => yr.days.find((d) => d.key === key).date;
+      let start, end;
+      if (season === 'Advent') { start = CY.parse(k('advent1')); end = CY.parse(k('advent4')); }
+      else { start = CY.parse(k('ashWednesday')); end = CY.parse(k('palmSunday')); }
+      for (let d = CY.add(start, 1); d < end; d = CY.add(d, 1)) if (CY.dow(d) === wd) out.push(CY.iso(d));
+      return { season, list: out };
+    };
+    const prev = () => { const { list } = dates(); $('#mwPreview', box).textContent = `${list.length} services: ${list.map(fmt).join(', ')}`; };
+    box.addEventListener('change', prev); prev();
+    $('#mwCancel', box).onclick = () => box.remove();
+    $('#mwOk', box).onclick = async () => {
+      const { season, list } = dates(); const setting = $('#mwSetting', box).value, time = $('#mwTime', box).value.trim();
+      const prefix = season === 'Advent' ? 'Advent Midweek' : 'Lenten Midweek';
+      for (const [i, date] of list.entries()) {
+        const key = `custom-${date}-${prefix.toLowerCase().replace(/\s+/g, '-')}`;
+        if (store.get(key)) continue;
+        await store.save(key, { custom: true, date, name: `${prefix} ${i + 1}`, color: season === 'Advent' ? 'blue' : 'violet', setting,
+          services: [{ label: `${WD[CY.dow(CY.parse(date))]} ${time}`, musician: '' }], slots: defaultSlots(setting, { season }), flags: [] });
+      }
+      box.remove(); render();
+    };
+  }
+
+  // Change history: who changed what, coalescing quick edits by the same person
+  const FIELD_NAMES = { slots: 'order of service', services: 'services & musicians', sermonTitle: 'sermon title', preacher: 'preacher',
+    sermonNotes: 'sermon notes', notes: 'team notes', setting: 'setting', readingsOverride: 'readings', observe: 'observance',
+    observedDate: 'date kept', volunteers: 'volunteers', series: 'sermon series', locked: 'final/lock', flags: 'notes to check' };
+  function addHistory(prev, next) {
+    const hist = (prev && prev.history ? prev.history.slice() : []);
+    const changed = Object.keys(FIELD_NAMES).filter((f) => JSON.stringify((prev || {})[f] ?? null) !== JSON.stringify(next[f] ?? null));
+    if (!changed.length) return hist;
+    const by = store.user ? (store.user.email || store.user.name) : '';
+    const now = new Date().toISOString(); const last = hist[hist.length - 1];
+    if (last && last.by === by && Date.now() - Date.parse(last.at) < 10 * 60e3) {
+      last.what = [...new Set([...last.what.split(', '), ...changed.map((f) => FIELD_NAMES[f])])].join(', '); last.at = now;
+    } else hist.push({ at: now, by, what: changed.map((f) => FIELD_NAMES[f]).join(', ') });
+    return hist.slice(-40);
+  }
+
+  // Bulletin draft as a Word document
+  async function bulletin(key) {
+    if (!window.docx) await new Promise((ok, bad) => { const sc = document.createElement('script'); sc.src = 'js/vendor/docx.umd.js'; sc.onload = ok; sc.onerror = bad; document.head.appendChild(sc); });
+    const D = window.docx; const day = findDay(key); const p = draft;
+    const obs = p.observe && (day.festivals || []).find((f) => f.key === p.observe);
+    const readings = p.readingsOverride || (obs && obs.readings && obs.readings.r) || day.readings;
+    const P = (text, o = {}) => new D.Paragraph({ children: [new D.TextRun({ text, bold: o.bold, italics: o.italics, size: o.size, font: 'Georgia' })], alignment: o.center ? D.AlignmentType.CENTER : undefined, spacing: { after: o.after ?? 80 } });
+    const rows = (p.slots || []).filter((s) => s.value || /Reading/.test(s.label)).map((s) => {
+      let v = s.value;
+      if (/First Reading/.test(s.label) && readings) v = readings[0];
+      else if (/Epist/.test(s.label) && readings) v = readings[2];
+      else if (/Gospel Reading/.test(s.label) && readings) v = readings[3];
+      return new D.TableRow({ children: [s.label, v || '', s.note || ''].map((t, i) => new D.TableCell({ width: { size: [32, 48, 20][i], type: D.WidthType.PERCENTAGE },
+        children: [new D.Paragraph({ children: [new D.TextRun({ text: t, bold: i === 0, size: 21, font: 'Georgia' })] })] })) });
+    });
+    const vol = ROLES.filter((r) => (p.volunteers[r] || []).some(Boolean)).map((r) => `${r}: ${(p.volunteers[r] || []).map((n, i) => n ? `${n}${(p.services || []).length > 1 ? ` (${(p.services[i] || {}).label})` : ''}` : '').filter(Boolean).join(', ')}`);
+    const doc = new D.Document({ sections: [{ children: [
+      P('Bethlehem Lutheran Church', { bold: true, size: 32, center: true, after: 40 }),
+      P(obs ? obs.name : day.name, { bold: true, size: 28, center: true, after: 40 }),
+      P(`${whenLabel(servedOn(key, p))} · ${p.setting}${day.series ? ` · Series ${day.series}` : ''}`, { italics: true, center: true, after: 240 }),
+      ...(readings ? [P('Readings', { bold: true, size: 24 }), ...READ_LABELS.map((l, i) => P(`${l}: ${readings[i]}`, { size: 22 }))] : []),
+      ...(p.sermonTitle ? [P(`Sermon: “${p.sermonTitle}”${p.preacher ? ` — ${p.preacher}` : ''}`, { bold: true, size: 22, after: 200 })] : []),
+      P('Order of Service', { bold: true, size: 24 }),
+      new D.Table({ width: { size: 100, type: D.WidthType.PERCENTAGE }, rows }),
+      P('', {}),
+      P((p.services || []).map((s) => `${s.label}${s.musician ? ` — ${s.musician}` : ''}`).join('   ·   '), { size: 20 }),
+      ...vol.map((v) => P(v, { size: 20 })),
+    ] }] });
+    const blob = await D.Packer.toBlob(doc);
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `Bulletin ${servedOn(key, p)} ${(obs ? obs.name : day.name).replace(/[^A-Za-z0-9 ]+/g, '')}.docx`;
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+
   // ---------- Print ----------
   function printDay(key) {
     const day = findDay(key); const p = draft;
@@ -319,6 +539,7 @@
       ${readings ? `<p>${READ_LABELS.map((l, i) => `<b>${l}:</b> ${esc(readings[i])}`).join('<br>')}</p>` : ''}
       <table>${(p.slots || []).map((s) => `<tr><td>${esc(s.label)}</td><td>${esc(s.value)}</td><td>${esc(s.note)}</td></tr>`).join('')}</table>
       <p>${(p.services || []).map((s) => `${esc(s.label)}${s.musician ? `: ${esc(s.musician)}` : ''}`).join(' · ')}</p>
+      ${ROLES.filter((r) => ((p.volunteers || {})[r] || []).some(Boolean)).map((r) => `<div><b>${esc(r)}:</b> ${esc(p.volunteers[r].filter(Boolean).join(', '))}</div>`).join('')}
       ${p.notes ? `<p><b>Notes:</b> ${esc(p.notes)}</p>` : ''}`;
     document.body.appendChild(w);
     window.print();
@@ -335,6 +556,7 @@
   function queueSave(rerender) {
     const key = draft.__key;
     const plan = Object.assign({}, draft); delete plan.__key;
+    plan.history = addHistory(store.get(key), plan); draft.history = plan.history;
     $('#savestate') && ($('#savestate').textContent = 'Saving…');
     clearTimeout(saveTimer);
     pending = true;
@@ -363,9 +585,15 @@
       case 'down': if (i < draft.slots.length - 1) [draft.slots[i + 1], draft.slots[i]] = [draft.slots[i], draft.slots[i + 1]]; return queueSave(true);
       case 'resetSlots': if (confirmInline(el, 'Replace the order of service?')) { draft.slots = defaultSlots(draft.setting, day); queueSave(true); } return;
       case 'print': return printDay(view.key);
+      case 'bulletin': el.textContent = 'Building…'; return bulletin(view.key).catch((e) => alertInline(el, 'Failed: ' + e.message)).finally(() => { if (el.isConnected) el.textContent = 'Bulletin (.docx)'; });
+      case 'lock': if (confirmInline(el, 'Lock this weekend as final?')) { draft.locked = { by: store.user ? (store.user.name || store.user.email) : 'Preview', at: new Date().toISOString() }; queueSave(true); } return;
+      case 'unlock': draft.locked = null; return queueSave(true);
+      case 'useHotd': { const n = el.dataset.n; const sh = draft.slots.find((x) => x.label === 'Sermon Hymn') || (draft.slots.push({ label: 'Sermon Hymn', value: '', note: '' }), draft.slots[draft.slots.length - 1]);
+        sh.value = `LSB ${n} "${HY.titleFor(n)}"`; sh.note = 'Hymn of the Day'; return queueSave(true); }
       case 'delCustom': if (confirmInline(el, 'Delete this service?')) { store.remove(view.key); location.hash = '#calendar'; } return;
     }
   }
+  function alertInline(el, msg) { el.textContent = msg; }
   // two-tap confirm without browser dialogs
   function confirmInline(el, msg) {
     if (el.dataset.armed) return true;
@@ -400,6 +628,8 @@
     const h = location.hash.replace(/^#\/?/, '');
     if (h.startsWith('day-') || h.startsWith('day/')) { view = { name: 'day', key: decodeURIComponent(h.slice(4)) }; const d = findDay(view.key); if (d) curYear = CY.yearOf(CY.parse(d.date)); }
     else if (h === 'hymns') view = { name: 'hymns', q: view.q };
+    else if (h === 'series') view = { name: 'series', season: view.season };
+    else if (h === 'reports') view = { name: 'reports', from: view.from, to: view.to };
     else { view = { name: 'calendar' }; draft = null; }
     render();
     if (view.name === 'calendar' && !route.scrolled) { route.scrolled = true; const n = $('#nextRow'); n && n.scrollIntoView({ block: 'center' }); }
@@ -414,17 +644,33 @@
     if (t.id === 'finishLink') linkAction('finish');
     if (t.id === 'signout') store.signOut();
     if (t.id === 'addSpecial') addSpecial();
+    if (t.id === 'addMidweek') addMidweek();
+    if (t.id === 'csv') downloadCSV();
+    if (t.id === 'copyFeed') { const i = $('#feedUrl'); i.select(); navigator.clipboard && navigator.clipboard.writeText(i.value).then(() => { t.textContent = 'Copied'; }).catch(() => {}); }
     if (t.id === 'jumpToday') { curYear = CY.yearOf(new Date()); location.hash = '#calendar'; render(); const n = $('#nextRow'); n && n.scrollIntoView({ block: 'center' }); }
-    if (t.dataset.view) location.hash = t.dataset.view === 'hymns' ? '#hymns' : '#calendar';
+    if (t.dataset.view) location.hash = '#' + t.dataset.view;
   });
   document.addEventListener('input', (e) => {
     const f = e.target.dataset.f;
     if (f && draft) { setPath(draft, f, e.target.value); queueSave(false); }
+    if (e.target.dataset.vol && draft) { const r = e.target.dataset.vol; const arr = (draft.volunteers[r] = draft.volunteers[r] || []); arr[+e.target.dataset.i] = e.target.value; queueSave(false); }
+    if (e.target.dataset.sk) saveSeriesField(e.target.dataset.sk, e.target.dataset.sf, e.target.value);
     if (e.target.id === 'hq') { view.q = e.target.value; const pos = e.target.selectionStart; render(); const q = $('#hq'); q.focus(); q.setSelectionRange(pos, pos); }
   });
   document.addEventListener('change', (e) => {
     if (e.target.id === 'yearSel') { curYear = +e.target.value; render(); }
     if (e.target.dataset.f === 'setting' && draft) render();
+    if (/^slots\.\d+\.value$/.test(e.target.dataset.f || '') && draft) {
+      const v = expandHymn(e.target.value);
+      if (v !== e.target.value) { e.target.value = v; setPath(draft, e.target.dataset.f, v); queueSave(true); }
+    }
+    if (e.target.classList.contains('copyfrom') && draft && e.target.value) {
+      const src = store.get(e.target.value);
+      if (src) { draft.setting = src.setting; draft.slots = JSON.parse(JSON.stringify(src.slots || []));
+        draft.services = (src.services || []).map((x) => ({ label: x.label, musician: '' })); queueSave(true); }
+    }
+    if (e.target.id === 'seasonSel') { view.season = e.target.value; render(); }
+    if (e.target.id === 'repFrom' || e.target.id === 'repTo') { view.from = $('#repFrom').value; view.to = $('#repTo').value; render(); }
     if (e.target.classList.contains('obsdate') && draft && e.target.value) {
       const day = findDay(view.key);
       draft.observedDate = e.target.value === day.date ? null : e.target.value; queueSave(true);

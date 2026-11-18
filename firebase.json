@@ -12,7 +12,9 @@
       "dist/**",
       "**/.*",
       "README.md",
-      ".github/**"
+      ".github/**",
+      "scripts/**",
+      "data/**"
     ],
     "headers": [
       {
@@ -21,6 +23,36 @@
           {
             "key": "Cache-Control",
             "value": "no-cache"
+          }
+        ]
+      },
+      {
+        "source": "/public/**",
+        "headers": [
+          {
+            "key": "Access-Control-Allow-Origin",
+            "value": "*"
+          },
+          {
+            "key": "Cache-Control",
+            "value": "max-age=600"
+          }
+        ]
+      },
+      {
+        "source": "/feeds/**",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "text/calendar; charset=utf-8"
+          },
+          {
+            "key": "Cache-Control",
+            "value": "max-age=3600"
+          },
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex"
           }
         ]
       }

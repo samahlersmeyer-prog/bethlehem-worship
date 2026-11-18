@@ -95,6 +95,23 @@
   .row .what small.moved { color: var(--warn); }
   .obsrow { padding: 10px 16px; } .obsrow .chips { align-items: center; }
   .obsrow input.obsdate { width: auto; }
+  .lockbar { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 10px 16px; background: #eef3ea; border-color: #cfdcc6; }
+  .hotd { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); font-size: 14px; }
+  .hotd .lbl { margin-bottom: 4px; }
+  details.lastcycle, details.history { margin-top: 10px; font-size: 13.5px; }
+  details.history div { padding: 2px 0; }
+  table.vol, table.series, table.report { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 14px; }
+  table.vol th, table.series th, table.report th { text-align: left; font: 600 12px var(--sans); color: var(--muted); padding: 6px; border-bottom: 1px solid var(--line); }
+  table.vol td, table.series td, table.report td { padding: 4px 6px; border-bottom: 1px solid #f1ece2; vertical-align: top; }
+  table.vol td:first-child { font-weight: 600; width: 170px; }
+  table.series td.tx { font-size: 13px; color: #5b544c; width: 22%; }
+  table.series a { color: var(--ink); text-decoration: none; } table.series a:hover { color: var(--accent2); }
+  table.series input, table.series textarea { width: 100%; }
+  select.copyfrom { width: auto; max-width: 260px; font-size: 13px; padding: 3px 6px; }
+  i.lock { font-style: normal; font-size: 12px; }
+  .linkrow.wide { max-width: none; }
+  .toolbar label { display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); }
+  .toolbar label input { width: auto; }
   p.or { color: var(--muted); font-size: 13px; margin: 16px 0 0; }
   #printsheet { display: none; }
   @media (max-width: 760px) {
@@ -106,6 +123,8 @@
     .slots .slot { grid-template-columns: 1fr 1fr; }
     .slot .sv { grid-column: 1 / -1; grid-row: 2; } .slot .sn { grid-column: 1 / -1; }
     .toolbar select, .toolbar input { min-width: 0; width: 100%; }
+    table.vol td:first-child { width: auto; } table.series td.tx { display: none; }
+    nav.tabs { overflow-x: auto; }
   }
   @media print {
     header, main, .modal { display: none !important; }
@@ -124,14 +143,15 @@
     <h1><small>Bethlehem Lutheran Church · Fort Wayne</small>Worship Planner</h1>
     <div id="mode"></div>
   </div>
-  <nav class="tabs"><button data-view="calendar" class="on">Church Year</button><button data-view="hymns">Hymns</button></nav>
+  <nav class="tabs"><button data-view="calendar" class="on">Church Year</button><button data-view="series">Sermon Series</button><button data-view="hymns">Hymns</button><button data-view="reports">Reports</button></nav>
 </header>
 <main id="app"><p class="muted">Loading…</p></main>
-<script src="firebase-config.js?v=3"></script>
-<script src="js/lectionary.js?v=3"></script>
-<script src="js/calendar.js?v=3"></script>
-<script src="js/seed.js?v=3"></script>
-<script src="js/store.js?v=3"></script>
-<script src="js/app.js?v=3"></script>
+<script src="firebase-config.js?v=4"></script>
+<script src="js/lectionary.js?v=4"></script>
+<script src="js/hymns.js?v=4"></script>
+<script src="js/calendar.js?v=4"></script>
+<script src="js/seed.js?v=4"></script>
+<script src="js/store.js?v=4"></script>
+<script src="js/app.js?v=4"></script>
 </body>
 </html>
