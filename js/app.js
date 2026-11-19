@@ -20,7 +20,9 @@
     'Evening Prayer', 'Service of Prayer and Preaching', 'Other'];
 
   const ADMINS = ['ben.ahlersmeyer@gmail.com', 'sam.ahlersmeyer@gmail.com'];
-  const DEFAULT_SETTINGS = { choirs: 'Adult Choir, Children\'s Choir, Handbell Choir', anthems: {}, officeName: 'Akasha', officeEmail: 'bethfw@yahoo.com' };
+  const DEFAULT_SETTINGS = { choirs: 'Adult Choir, Children\'s Choir, Handbell Choir', anthems: {}, officeName: 'Akasha', officeEmail: 'bethfw@yahoo.com',
+    pastorName: 'Pastor Ben', pastorEmail: 'ben.ahlersmeyer@gmail.com' };
+  const APP_URL = 'https://bethlehem-worship.web.app/';
   // Where each order begins in the Lutheran Service Book pew edition
   const LSB_PAGE = { 'Divine Service, Setting One': 151, 'Divine Service, Setting Two': 167, 'Divine Service, Setting Three': 184,
     'Divine Service, Setting Four': 203, 'Divine Service, Setting Five': 213, Matins: 219, Vespers: 229, 'Morning Prayer': 235,
@@ -207,7 +209,8 @@
     _dl = { n: Object.keys(idx).length, html: `<datalist id="hymnlist">${opts.map((v) => `<option value="${esc(v)}">`).join('')}</datalist>` };
     return _dl.html;
   }
-  const isAdmin = () => store.mode === 'local' || (store.user && ADMINS.includes((store.user.email || '').toLowerCase()));
+  // Preview: add ?member to the address to see what Kasey and Janelle see
+  const isAdmin = () => (store.mode === 'local' && !/member/.test(location.search)) || (store.user && ADMINS.includes((store.user.email || '').toLowerCase()));
   // Same occasion in the last cycle (3 years earlier)
   function lastCycle(day) {
     if (!day || day.kind === 'custom') return null;
@@ -288,6 +291,9 @@
       <button id="jumpToday">Today</button>
       <button id="addMidweek">+ Midweek series</button>
       <button id="addSpecial">+ Special service</button></div>`;
+    const waiting = Object.entries(plans).filter(([, p]) => !p.locked && p.review && p.review.state === 'submitted').sort((a, b) => servedOn(a[0], a[1]).localeCompare(servedOn(b[0], b[1])));
+    if (waiting.length && isAdmin()) html += `<div class="card list reviewq"><div class="pad"><b>Waiting for your review</b></div>${waiting.map(([k, p]) => { const d = findDay(k);
+      return `<a class="row" href="#day-${esc(k)}"><span class="when">${esc(whenLabel(servedOn(k, p)))}</span><span class="what"><b>${esc(p.custom ? p.name : d ? d.name : k)}</b><small>Submitted by ${esc(p.review.by)} · ${esc(new Date(p.review.at).toLocaleDateString())}</small></span><span class="status"><i class="badge rev">Review</i></span></a>`; }).join('')}</div>`;
     let season = null, markedToday = false;
     for (const d of rows) {
       const grp = d.kind === 'custom' ? season : d.season;
@@ -307,7 +313,7 @@
         <span class="what"><b>${esc(d.name)}</b>${moved ? `<small class="moved">Observed · actual date ${esc(fmt(d.date))}</small>` : ''}${fest ? `<small class="fest">${esc(fest)}</small>` : ''}
           ${gospel ? `<small>${esc(gospel)}</small>` : ''}</span>
         <span class="sermon">${p && p.sermonTitle ? `“${esc(p.sermonTitle)}”` : ''}</span>
-        <span class="status">${p && p.locked ? '<i class="lock" title="Final">🔒</i>' : ''}${p ? `${p.flags && p.flags.length ? '<i class="flag" title="Needs a look">!</i>' : ''}<span class="meter"><span style="width:${pr.total ? (100 * pr.done / pr.total) : 0}%"></span></span>` : '<span class="muted">not started</span>'}</span>
+        <span class="status">${p && !p.locked && p.review && p.review.state === 'submitted' ? '<i class="badge rev">For review</i>' : ''}${p && !p.locked && p.review && p.review.state === 'changes' ? '<i class="badge chg">Changes</i>' : ''}${p && p.locked ? '<i class="lock" title="Final">🔒</i>' : ''}${p ? `${p.flags && p.flags.length ? '<i class="flag" title="Needs a look">!</i>' : ''}<span class="meter"><span style="width:${pr.total ? (100 * pr.done / pr.total) : 0}%"></span></span>` : '<span class="muted">not started</span>'}</span>
       </a>`;
     }
     return html + '</div>';
@@ -339,6 +345,14 @@
         ${isAdmin() ? '<button data-act="unlock">Unlock</button>' : '<span class="muted">Ask Pastor Ben or Sam to unlock.</span>'}
         <span class="officebar"><button class="primary" data-act="mailOffice">Email outline to ${esc(conf().officeName)}</button><button data-act="copyOutline">Copy outline</button>
         ${p.officeSent ? `<span class="muted">Emailed ${esc(new Date(p.officeSent.at).toLocaleDateString())} by ${esc(p.officeSent.by)}</span>` : ''}</span></div>`;
+    }
+
+    if (!p.locked && p.review && p.review.state) {
+      const r = p.review;
+      if (r.state === 'submitted') h += `<div class="card reviewbar"><span>📨 Submitted to ${esc(conf().pastorName)} by ${esc(r.by)} on ${esc(new Date(r.at).toLocaleDateString())}.${r.message ? ` “${esc(r.message)}”` : ''}</span>
+        ${isAdmin() ? `<span class="officebar"><button class="primary" data-act="approve">Approve & send to ${esc(conf().officeName)}</button><input id="sendBackNote" placeholder="What needs changing?"><button data-act="sendBack">Send back</button></span>` : `<span class="muted">Waiting for ${esc(conf().pastorName)}.</span>`}</div>`;
+      else if (r.state === 'changes') h += `<div class="card reviewbar chg"><span>↩︎ ${esc(r.reviewer || conf().pastorName)} asked for changes${r.note ? `: “${esc(r.note)}”` : '.'}</span>
+        ${store.canEdit ? '<button data-act="submitReview">Resubmit</button>' : ''}</div>`;
     }
 
     if (day.kind !== 'custom') {
@@ -434,7 +448,8 @@
     h += `<div class="card pad"><label class="fld"><span>Notes for the team</span><textarea data-f="notes" rows="3" ${ro}>${esc(p.notes)}</textarea></label>
       <div class="foot"><span id="savestate" class="muted">${saved && saved.updatedAt ? `Saved ${new Date(saved.updatedAt).toLocaleString()}${saved.updatedBy && saved.updatedBy !== 'preview' ? ' by ' + esc(saved.updatedBy) : ''}` : ''}</span>
       <span class="grow"></span><button data-act="print">Print / PDF</button>
-      ${store.canEdit && saved && !p.locked ? '<button class="primary" data-act="lock">Mark final 🔒</button>' : ''}
+      ${store.canEdit && saved && !p.locked && !isAdmin() && !(p.review && p.review.state === 'submitted') ? `<input id="submitMsg" placeholder="Note for ${esc(conf().pastorName)} (optional)"><button class="primary" data-act="submitReview">Submit to ${esc(conf().pastorName)}</button>` : ''}
+      ${store.canEdit && saved && !p.locked && isAdmin() ? `<button class="primary" data-act="approve">Approve & send to ${esc(conf().officeName)} 🔒</button>` : ''}
       ${store.canEdit && !p.locked && day.kind === 'custom' ? '<button class="danger" data-act="delCustom">Delete service</button>' : ''}</div>
       ${p.history && p.history.length ? `<details class="history"><summary>Change history (${p.history.length})</summary>${p.history.slice().reverse().map((x) => `<div><span class="muted">${esc(new Date(x.at).toLocaleString())}</span> · ${esc(x.by || '')} · ${esc(x.what)}</div>`).join('')}</details>` : ''}</div>`;
     return h;
@@ -760,9 +775,30 @@
     L.push(`Marked final in the Bethlehem worship planner${p.locked ? ' by ' + p.locked.by : ''}.`);
     return { subject: `Final service outline: ${name} — ${when}`, body: L.join('\n') };
   }
-  function mailOffice(key) {
-    const o = outlineText(key); const C = conf();
-    location.href = `mailto:${encodeURIComponent(C.officeEmail)}?subject=${encodeURIComponent(o.subject)}&body=${encodeURIComponent(`Hi ${C.officeName},\n\nHere is the final outline for the bulletin.\n\n` + o.body)}`;
+  const who = () => store.user ? (store.user.name || store.user.email) : 'Preview';
+  // Emails go out automatically when the mailer is running (it checks in every few minutes);
+  // otherwise the person's own email app opens with the message ready to send.
+  function sendMail(kind, key) {
+    const C = conf(); const o = outlineText(key); const link = APP_URL + '#day-' + key; const r = draft.review || {};
+    let to, subject, body, art = null, replyTo = store.user ? store.user.email : '';
+    if (kind === 'office') {
+      to = C.officeEmail; subject = o.subject;
+      body = `Hi ${C.officeName},\n\nHere is the final outline for the bulletin${store.mailerLive ? ' (cover art attached)' : ''}.\n\n${o.body}`;
+      art = (artChoice(findDay(key), draft) || {}).id || null; replyTo = C.pastorEmail;
+    } else if (kind === 'pastor') {
+      to = C.pastorEmail; subject = `Ready for review: ${o.subject.replace(/^Final service outline: /, '')}`;
+      body = `${C.pastorName},\n\n${r.by} submitted this service for your review.${r.message ? `\n\n“${r.message}”` : ''}\n\nReview and approve: ${link}\n\n${o.body.replace(/\nMarked final.*$/, '')}`;
+    } else {
+      to = r.byEmail || ''; subject = `Changes requested: ${o.subject.replace(/^Final service outline: /, '')}`;
+      body = `${C.pastorName} asked for changes${r.note ? `:\n\n“${r.note}”` : '.'}\n\nOpen the service: ${link}\n`;
+    }
+    if (!to) return;
+    if (store.mailerLive) {
+      draft.outbox = (draft.outbox || []).filter((m) => m.pending).concat({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), kind, to, subject, body, art, replyTo, pending: true, at: new Date().toISOString() });
+      draft.outboxPending = true;
+    } else {
+      location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    }
   }
 
   // ---------- Print ----------
@@ -839,9 +875,17 @@
       case 'down': if (i < draft.slots.length - 1) [draft.slots[i + 1], draft.slots[i]] = [draft.slots[i], draft.slots[i + 1]]; return queueSave(true);
       case 'resetSlots': if (confirmInline(el, 'Replace the order of service?')) { draft.slots = defaultSlots(draft.setting, day); queueSave(true); } return;
       case 'print': return printDay(view.key);
-      case 'lock': if (confirmInline(el, `Lock as final and email ${conf().officeName}?`)) { const by = store.user ? (store.user.name || store.user.email) : 'Preview';
-        draft.locked = { by, at: new Date().toISOString() }; mailOffice(view.key); draft.officeSent = { by, at: new Date().toISOString() }; queueSave(true); } return;
-      case 'mailOffice': mailOffice(view.key); if (isAdmin()) { draft.officeSent = { by: store.user ? (store.user.name || store.user.email) : 'Preview', at: new Date().toISOString() }; queueSave(true); } return;
+      case 'lock': case 'approve': if (confirmInline(el, `Lock as final and send to ${conf().officeName}?`)) {
+        draft.locked = { by: who(), at: new Date().toISOString() };
+        draft.review = Object.assign({}, draft.review, { state: 'approved', reviewer: who(), reviewedAt: new Date().toISOString() });
+        sendMail('office', view.key); draft.officeSent = { by: who(), at: new Date().toISOString() }; queueSave(true); } return;
+      case 'mailOffice': sendMail('office', view.key); if (isAdmin()) { draft.officeSent = { by: who(), at: new Date().toISOString() }; queueSave(true); } return;
+      case 'submitReview': { const m = ($('#submitMsg') || {}).value || '';
+        draft.review = { state: 'submitted', by: who(), byEmail: store.user ? store.user.email : '', at: new Date().toISOString(), message: m.trim() };
+        sendMail('pastor', view.key); queueSave(true); return; }
+      case 'sendBack': { const note = ($('#sendBackNote') || {}).value || '';
+        draft.review = Object.assign({}, draft.review, { state: 'changes', note: note.trim(), reviewer: who(), reviewedAt: new Date().toISOString() });
+        sendMail('changes', view.key); queueSave(true); return; }
       case 'copyOutline': navigator.clipboard.writeText(outlineText(view.key).body).then(() => { el.textContent = 'Copied ✓'; }).catch(() => { el.textContent = 'Copy failed'; }); return;
       case 'unlock': draft.locked = null; return queueSave(true);
       case 'useHotd': { const n = el.dataset.n; const sh = draft.slots.find((x) => x.label === 'Sermon Hymn') || (draft.slots.push({ label: 'Sermon Hymn', value: '', note: '' }), draft.slots[draft.slots.length - 1]);

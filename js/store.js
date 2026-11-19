@@ -103,6 +103,8 @@
       plans = {};
       if (u) {
         fs.getDoc(fs.doc(db, 'config', 'feed')).then((d) => { if (d.exists()) { store.feed = d.data().url; subs.forEach((f) => f(plans)); } }).catch(() => {});
+        // The automatic mailer checks in every few minutes; if it's quiet, emails open in the person's mail app instead
+        fs.getDoc(fs.doc(db, 'config', 'mailer')).then((d) => { store.mailerLive = d.exists() && Date.now() - Date.parse(d.data().at) < 30 * 60e3; }).catch(() => {});
         let first = true;
         unsub = fs.onSnapshot(col, (snap) => {
           if (first && snap.empty) { first = false; store.importSeed(); return; } // first sign-in: load Ben's sheet

@@ -131,6 +131,12 @@
   .artpick .aplist .row { width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid #f1ece2; cursor: pointer; }
   .artpick .aplist .row:hover { background: #faf6ee; }
   .lockbar .officebar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; flex-basis: 100%; margin-top: 8px; }
+  .reviewbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 10px 16px; background: #eef2f8; border-color: #cbd6e6; }
+  .reviewbar.chg { background: #fff6e5; border-color: #ecd3a0; }
+  .reviewbar input, .foot input#submitMsg { flex: 1; min-width: 160px; }
+  .badge.rev { background: #dfe8f5; color: #29466e; font-style: normal; }
+  .badge.chg { background: #fbe9c7; color: #6b4e00; font-style: normal; }
+  .reviewq { border-color: #cbd6e6; }
   p.or { color: var(--muted); font-size: 13px; margin: 16px 0 0; }
   #printsheet { display: none; }
   @media (max-width: 760px) {
@@ -167,13 +173,13 @@
   <nav class="tabs"><button data-view="calendar" class="on">Church Year</button><button data-view="series">Sermon Series</button><button data-view="hymns">Hymns</button><button data-view="choir">Choir</button><button data-view="reports">Reports</button></nav>
 </header>
 <main id="app"><p class="muted">Loading…</p></main>
-<script src="firebase-config.js?v=9"></script>
-<script src="js/lectionary.js?v=9"></script>
-<script src="js/hymns.js?v=9"></script>
-<script src="js/art.js?v=9"></script>
-<script src="js/calendar.js?v=9"></script>
-<script src="js/seed.js?v=9"></script>
-<script src="js/store.js?v=9"></script>
-<script src="js/app.js?v=9"></script>
+<script src="firebase-config.js?v=10"></script>
+<script src="js/lectionary.js?v=10"></script>
+<script src="js/hymns.js?v=10"></script>
+<script src="js/art.js?v=10"></script>
+<script src="js/calendar.js?v=10"></script>
+<script src="js/seed.js?v=10"></script>
+<script src="js/store.js?v=10"></script>
+<script src="js/app.js?v=10"></script>
 </body>
 </html>
