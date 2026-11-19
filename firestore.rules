@@ -1,7 +1,8 @@
 rules_version = '2';
 // Only the planning team can read or edit plans. Sign-in by Google or emailed link
 // (both verify the address); unverified email/password accounts are refused.
-// A weekend marked final (locked) can only be changed or unlocked by an admin.
+// A weekend marked final (locked) can only be changed or unlocked by an admin,
+// except its serving names (volunteers, preacher, musicians), which the office keeps up to date.
 // Add or remove people here AND in the Firebase console (Firestore → Rules).
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -11,15 +12,21 @@ service cloud.firestore {
         'ben.ahlersmeyer@gmail.com',
         'sam.ahlersmeyer@gmail.com',
         'kaseyneedham92@gmail.com',
-        'janelle.buford@my.wheaton.edu'
+        'janelle.buford@my.wheaton.edu',
+        'bethfw@yahoo.com'
       ];
     }
     function admin() {
       return team() && request.auth.token.email in ['ben.ahlersmeyer@gmail.com', 'sam.ahlersmeyer@gmail.com'];
     }
+    function servingOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['volunteers', 'preacher', 'services', 'history', 'updatedAt', 'updatedBy', 'outbox', 'outboxPending']);
+    }
     match /plans/{id} {
       allow read, create: if team();
-      allow update, delete: if team() && (resource.data.get('locked', null) == null || admin());
+      allow update: if team() && (resource.data.get('locked', null) == null || admin() || servingOnly());
+      allow delete: if team() && (resource.data.get('locked', null) == null || admin());
     }
     match /config/{id} {
       allow read: if team();

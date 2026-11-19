@@ -28,7 +28,14 @@
     'Divine Service, Setting Four': 203, 'Divine Service, Setting Five': 213, Matins: 219, Vespers: 229, 'Morning Prayer': 235,
     'Evening Prayer': 243, 'Service of Prayer and Preaching': 260 };
   const conf = () => Object.assign({}, DEFAULT_SETTINGS, store.settings || {});
-  const ROLES = ['Lector', 'Acolyte', 'Communion Assistant', 'Elder on Duty', 'Usher', 'Altar Guild'];
+  // Same roles, same order as the "Serving" tables in Bethlehem's bulletin
+  const ROLES = ['Altar Guild', 'Elder', 'Head Usher', 'Reader', 'PowerPoint Operator', 'Live Stream', 'Soundboard Operator'];
+  const OLD_ROLE = { 'Elder on Duty': 'Elder', Usher: 'Head Usher', Lector: 'Reader' };
+  function normVol(p) {
+    p.volunteers = p.volunteers || {};
+    for (const [o, n] of Object.entries(OLD_ROLE)) if (p.volunteers[o] && !p.volunteers[n]) { p.volunteers[n] = p.volunteers[o]; delete p.volunteers[o]; }
+    return p;
+  }
   const HY = window.HYMNS;
   let store, years = {}, curYear, view = { name: 'calendar' }, saveTimer = null, draft = null, pending = false;
 
@@ -235,6 +242,7 @@
     else if (view.name === 'series') app.innerHTML = seriesView();
     else if (view.name === 'reports') app.innerHTML = reportsView();
     else if (view.name === 'choir') app.innerHTML = choirView();
+    else if (view.name === 'serving') app.innerHTML = servingView();
     else app.innerHTML = calendarView();
     if (view.name === 'day') hydrateArt();
   }
@@ -326,7 +334,7 @@
     const saved = store.get(key);
     if (!draft || draft.__key !== key) draft = Object.assign({ __key: key }, JSON.parse(JSON.stringify(saved || newPlan(day))));
     const p = draft;
-    p.volunteers = p.volunteers || {};
+    normVol(p);
     const isSun = day.kind === 'sunday';
     const ro = store.canEdit && !p.locked ? '' : 'disabled';
     const idx = hymnIndex();
@@ -444,8 +452,11 @@
 
     // Volunteers
     const svcs = (p.services || []).length ? p.services : [{ label: 'Service' }];
-    h += `<div class="card pad"><b>Volunteers</b><table class="vol"><tr><th></th>${svcs.map((x) => `<th>${esc(x.label)}</th>`).join('')}</tr>
-      ${ROLES.map((r) => `<tr><td>${esc(r)}</td>${svcs.map((x, i) => `<td><input data-vol="${esc(r)}" data-i="${i}" value="${esc((p.volunteers[r] || [])[i] || '')}" ${ro}></td>`).join('')}</tr>`).join('')}</table></div>`;
+    const roVol = store.canEdit ? '' : 'disabled';
+    h += `<div class="card pad"><div class="cardhead"><b>Serving</b><span class="grow"></span><a class="link" href="#serving">All weekends →</a></div>
+      ${p.locked ? '<p class="muted">This weekend is final, but serving names can still be changed. The bulletin is updated the next morning.</p>' : ''}
+      <table class="vol"><tr><th></th>${svcs.map((x) => `<th>${esc(x.label)}</th>`).join('')}</tr>
+      ${ROLES.map((r) => `<tr><td>${esc(r)}</td>${svcs.map((x, i) => `<td><input data-vol="${esc(r)}" data-i="${i}" value="${esc((p.volunteers[r] || [])[i] || '')}" ${roVol}></td>`).join('')}</tr>`).join('')}</table></div>`;
 
     h += artCard(key, day, p);
 
@@ -685,7 +696,7 @@
   // Change history: who changed what, coalescing quick edits by the same person
   const FIELD_NAMES = { slots: 'order of service', services: 'services & musicians', sermonTitle: 'sermon title', preacher: 'preacher',
     sermonNotes: 'sermon notes', notes: 'team notes', setting: 'setting', readingsOverride: 'readings', observe: 'observance',
-    observedDate: 'date kept', volunteers: 'volunteers', series: 'sermon series', locked: 'final/lock', flags: 'notes to check', art: 'cover art', officeSent: 'emailed office' };
+    observedDate: 'date kept', volunteers: 'serving', series: 'sermon series', locked: 'final/lock', flags: 'notes to check', art: 'cover art', officeSent: 'emailed office' };
   function addHistory(prev, next) {
     const hist = (prev && prev.history ? prev.history.slice() : []);
     const changed = Object.keys(FIELD_NAMES).filter((f) => JSON.stringify((prev || {})[f] ?? null) !== JSON.stringify(next[f] ?? null));
@@ -791,6 +802,7 @@
     return n >= 1 && n <= 29 ? `${ordinal(n)} Sunday after Pentecost` : '';
   }
   function servingLines(p) {
+    p = normVol(JSON.parse(JSON.stringify(p)));
     const svcs = p.services || []; const out = [];
     svcs.forEach((s) => s.musician && out.push(`Musician (${s.label}): ${s.musician}`));
     for (const s of p.slots || []) if (s.kind === 'choir' && s.value) out.push(`${s.group || 'Choir'}: ${[s.director && s.director + ', director', choirAtLabel(s, p)].filter(Boolean).join(' · ') || '—'}`);
@@ -798,6 +810,65 @@
     if (p.preacher) out.unshift(`Preacher: ${p.preacher}`);
     return out;
   }
+  // ---------- Serving (all upcoming weekends, for the office) ----------
+  // On a weekend Ben already approved, a change queues a short "Serving update" email
+  // (sent by the mailer); the morning bulletin run patches that week's Canva bulletin from it.
+  function servingChanged(key, p) {
+    if (!store.mailerLive) return;
+    if (!(p.locked || (p.review && p.review.state === 'approved'))) return;
+    const day = findDay(key); if (!day) return;
+    const name = p.custom ? p.name : (pentecostName(day) || day.name);
+    const when = whenLabel(servedOn(key, p));
+    const body = [`SERVING UPDATE — ${name} — ${when}`, '', 'This weekend:', ...(servingLines(p).length ? servingLines(p) : ['(none)']), '',
+      'Pastor Ben already approved this weekend; only the serving names changed.'].join('\n');
+    p.outbox = (p.outbox || []).filter((m) => m.pending && m.kind !== 'serving')
+      .concat({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), kind: 'serving', to: conf().officeEmail, subject: `Serving update: ${name} — ${when}`, body, art: null, replyTo: conf().officeEmail, pending: true, at: new Date().toISOString() });
+    p.outboxPending = true;
+  }
+  function servingWeekends() {
+    const today = CY.iso(new Date());
+    const out = [];
+    for (const y of [curYear, curYear + 1]) for (const d of yearData(y).days) if (d.kind === 'sunday' && servedOn(d.date, store.get(d.date)) >= today) out.push(d);
+    return out.sort((a, b) => a.date.localeCompare(b.date)).slice(0, view.count || 6);
+  }
+  function servingView() {
+    const ed = store.canEdit ? '' : 'disabled';
+    const cards = servingWeekends().map((d) => {
+      const p = normVol(JSON.parse(JSON.stringify(store.get(d.date) || newPlan(d))));
+      const svcs = (p.services || []).length ? p.services : [{ label: 'Service' }];
+      const k = esc(d.date);
+      return `<div class="card pad servecard"><div class="cardhead"><b>${esc(whenLabel(servedOn(d.date, p)))}</b> <span class="muted">${esc(pentecostName(d) || d.name)}</span><span class="grow"></span>
+          ${p.locked ? '<span class="badge">Final 🔒</span>' : p.review && p.review.state === 'submitted' ? '<i class="badge rev">For review</i>' : ''} <a class="link" href="#day-${k}">Open</a></div>
+        <table class="vol"><tr><th></th>${svcs.map((x) => `<th>${esc(x.label)}</th>`).join('')}</tr>
+          <tr><td>Preacher</td><td colspan="${svcs.length}"><input data-sv="${k}" data-sf="preacher" value="${esc(p.preacher || '')}" ${ed}></td></tr>
+          <tr><td>Musicians</td>${svcs.map((x, i) => `<td><input data-sv="${k}" data-sf="musician" data-i="${i}" value="${esc(x.musician || '')}" ${ed}></td>`).join('')}</tr>
+          ${ROLES.map((r) => `<tr><td>${esc(r)}</td>${svcs.map((x, i) => `<td><input data-sv="${k}" data-sf="vol" data-r="${esc(r)}" data-i="${i}" value="${esc((p.volunteers[r] || [])[i] || '')}" ${ed}></td>`).join('')}</tr>`).join('')}
+        </table></div>`;
+    }).join('');
+    return `<div class="toolbar"><b>Serving</b><span class="grow"></span><span class="muted" id="svstate">Changes save as you type</span>
+      <button id="svMore">Show more weekends</button></div>
+      <p class="muted">Names here print in the bulletin's serving tables. Weekends already marked final can still be changed; the bulletin in Canva is updated the next morning.</p>${cards}`;
+  }
+  const svTimers = {}, svDrafts = {};
+  function servingInput(el) {
+    const key = el.dataset.sv; const day = findDay(key); if (!day) return;
+    const p = svDrafts[key] || (svDrafts[key] = normVol(JSON.parse(JSON.stringify(store.get(key) || newPlan(day)))));
+    const f = el.dataset.sf, i = +el.dataset.i;
+    if (f === 'preacher') p.preacher = el.value;
+    else if (f === 'musician') { p.services = p.services || []; (p.services[i] = p.services[i] || { label: 'Service', musician: '' }).musician = el.value; }
+    else { const arr = (p.volunteers[el.dataset.r] = p.volunteers[el.dataset.r] || []); arr[i] = el.value; }
+    const st = $('#svstate'); st && (st.textContent = 'Saving…');
+    clearTimeout(svTimers[key]);
+    pending = true;
+    svTimers[key] = setTimeout(async () => {
+      const d = svDrafts[key]; delete svDrafts[key];
+      servingChanged(key, d);
+      d.history = addHistory(store.get(key), d);
+      try { await store.save(key, d); st && (st.textContent = 'Saved'); } catch (e) { st && (st.textContent = 'Not saved: ' + e.message); }
+      pending = Object.keys(svDrafts).length > 0;
+    }, 700);
+  }
+
   // Final outline for the church office, in the same order as the bulletin template (cover → order of service → serving → next Sunday)
   function outlineText(key) {
     const day = findDay(key); const p = draft;
@@ -1005,6 +1076,7 @@
     else if (h === 'series') view = { name: 'series', season: view.season };
     else if (h === 'reports') view = { name: 'reports', from: view.from, to: view.to };
     else if (h === 'choir') view = { name: 'choir' };
+    else if (h === 'serving') view = { name: 'serving', count: view.count };
     else { view = { name: 'calendar' }; draft = null; }
     render();
     if (view.name === 'calendar' && !route.scrolled) { route.scrolled = true; const n = $('#nextRow'); n && n.scrollIntoView({ block: 'center' }); }
@@ -1024,6 +1096,7 @@
     if (t.id === 'addSpecial') addSpecial();
     if (t.id === 'addMidweek') addMidweek();
     if (t.id === 'csv') downloadCSV();
+    if (t.id === 'svMore') { view.count = (view.count || 6) + 6; render(); }
     if (t.id === 'copyFeed') { const i = $('#feedUrl'); i.select(); navigator.clipboard && navigator.clipboard.writeText(i.value).then(() => { t.textContent = 'Copied'; }).catch(() => {}); }
     if (t.id === 'jumpToday') { curYear = CY.yearOf(new Date()); location.hash = '#calendar'; render(); const n = $('#nextRow'); n && n.scrollIntoView({ block: 'center' }); }
     if (t.dataset.view) location.hash = '#' + t.dataset.view;
@@ -1031,7 +1104,8 @@
   document.addEventListener('input', (e) => {
     const f = e.target.dataset.f;
     if (f && draft) { setPath(draft, f, e.target.value); queueSave(false); }
-    if (e.target.dataset.vol && draft) { const r = e.target.dataset.vol; const arr = (draft.volunteers[r] = draft.volunteers[r] || []); arr[+e.target.dataset.i] = e.target.value; queueSave(false); }
+    if (e.target.dataset.vol && draft) { const r = e.target.dataset.vol; const arr = (draft.volunteers[r] = draft.volunteers[r] || []); arr[+e.target.dataset.i] = e.target.value; servingChanged(draft.__key, draft); queueSave(false); }
+    if (e.target.dataset.sv) servingInput(e.target);
     if (e.target.dataset.cfg) saveConf(e.target.dataset.cfg, e.target.value);
     if (e.target.dataset.anthem) { const C = conf(); const a = Object.assign({}, C.anthems || {}); a[e.target.dataset.anthem] = Object.assign({}, a[e.target.dataset.anthem], { copies: e.target.value === '' ? null : +e.target.value }); saveConf('anthems', a); }
     if (e.target.dataset.sk) saveSeriesField(e.target.dataset.sk, e.target.dataset.sf, e.target.value);
@@ -1067,6 +1141,7 @@
     store.subscribe(() => {
       const typing = document.activeElement && document.activeElement.dataset && document.activeElement.dataset.f;
       if (view.name === 'day' && (pending || typing)) return; // don't clobber local edits
+      if (view.name === 'serving' && (pending || (document.activeElement && document.activeElement.dataset && document.activeElement.dataset.sv))) return;
       if (view.name === 'day') draft = null; // pick up teammates' changes
       render();
     });
