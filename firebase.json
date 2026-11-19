@@ -14,7 +14,8 @@
       "README.md",
       ".github/**",
       "scripts/**",
-      "data/**"
+      "data/**",
+      "art/**"
     ],
     "headers": [
       {

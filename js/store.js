@@ -39,6 +39,8 @@
       subscribe(f) { subs.add(f); return () => subs.delete(f); },
       async importSeed() { plans = Object.assign(seedAll(), plans); safe.set(LS_KEY, plans); subs.forEach((f) => f(plans)); },
       async signIn() {}, async signOut() {},
+      // Preview: images are served straight from the repo folder (not deployed)
+      async getArt(id) { const r = await fetch('art/' + id + '.png'); if (!r.ok) return null; return URL.createObjectURL(await r.blob()); },
     };
   }
 
@@ -90,6 +92,8 @@
         history.replaceState(null, '', location.pathname);
       },
       async signOut() { await auth.signOut(a); },
+      // Licensed art lives in Firestore so only the signed-in team can load it
+      async getArt(id) { const d = await fs.getDoc(fs.doc(db, 'config', 'art-' + id)); return d.exists() ? 'data:image/png;base64,' + d.data().png : null; },
       onAuth: null,
     };
 

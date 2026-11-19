@@ -123,6 +123,13 @@
   .checks .warn { background: #fff3cd; color: #6b4e00; }
   .checks .info { background: #eef3f8; color: #2c4a66; }
   input.copies { width: 64px; }
+  .artcard .artbox { display: flex; justify-content: center; align-items: center; min-height: 120px; background: #fff; border: 1px solid #eee5d6; border-radius: 8px; padding: 10px; }
+  .artcard .artbox img { max-width: 100%; max-height: 420px; }
+  .artcard .arttitle { margin: 8px 0 4px; }
+  .artpick { width: min(640px, 94vw); max-height: 86vh; display: flex; flex-direction: column; }
+  .artpick .aplist { overflow: auto; flex: 1; border: 1px solid #eee5d6; border-radius: 8px; }
+  .artpick .aplist .row { width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid #f1ece2; cursor: pointer; }
+  .artpick .aplist .row:hover { background: #faf6ee; }
   p.or { color: var(--muted); font-size: 13px; margin: 16px 0 0; }
   #printsheet { display: none; }
   @media (max-width: 760px) {
@@ -159,12 +166,13 @@
   <nav class="tabs"><button data-view="calendar" class="on">Church Year</button><button data-view="series">Sermon Series</button><button data-view="hymns">Hymns</button><button data-view="choir">Choir</button><button data-view="reports">Reports</button></nav>
 </header>
 <main id="app"><p class="muted">Loading…</p></main>
-<script src="firebase-config.js?v=7"></script>
-<script src="js/lectionary.js?v=7"></script>
-<script src="js/hymns.js?v=7"></script>
-<script src="js/calendar.js?v=7"></script>
-<script src="js/seed.js?v=7"></script>
-<script src="js/store.js?v=7"></script>
-<script src="js/app.js?v=7"></script>
+<script src="firebase-config.js?v=8"></script>
+<script src="js/lectionary.js?v=8"></script>
+<script src="js/hymns.js?v=8"></script>
+<script src="js/art.js?v=8"></script>
+<script src="js/calendar.js?v=8"></script>
+<script src="js/seed.js?v=8"></script>
+<script src="js/store.js?v=8"></script>
+<script src="js/app.js?v=8"></script>
 </body>
 </html>

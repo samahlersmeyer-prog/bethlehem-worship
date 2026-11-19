@@ -20,22 +20,7 @@
     'Evening Prayer', 'Service of Prayer and Preaching', 'Other'];
 
   const ADMINS = ['ben.ahlersmeyer@gmail.com', 'sam.ahlersmeyer@gmail.com'];
-  // Where each order begins in the Lutheran Service Book pew edition
-  const LSB_PAGE = { 'Divine Service, Setting One': 151, 'Divine Service, Setting Two': 167, 'Divine Service, Setting Three': 184,
-    'Divine Service, Setting Four': 203, 'Divine Service, Setting Five': 213, Matins: 219, Vespers: 229, 'Morning Prayer': 235,
-    'Evening Prayer': 243, 'Service of Prayer and Preaching': 260 };
-  // Hymns the LSB Hymn License does not cover (CPH)
-  const NOT_IN_HYMN_LICENSE = { 'LSB 462': 'tune', 'LSB 712': 'text and tune' };
-  const DEFAULT_SETTINGS = {
-    churchName: 'Bethlehem Lutheran Church',
-    churchLine: 'Lutheran Church—Missouri Synod · Fort Wayne, Indiana',
-    welcome: 'Welcome in the name of our Lord Jesus Christ! We are glad you are here. The service is in the Lutheran Service Book in the pew; page and hymn numbers are listed below. Please sign the friendship register, and let an usher know if you need anything.',
-    communion: 'At Bethlehem we practice closed communion, as do all congregations of the Lutheran Church—Missouri Synod. The Lord\'s Supper is a confession of the faith we share (1 Corinthians 10:17; 11:27–29). Communicant members of LCMS congregations who are prepared to receive the Sacrament are welcome to commune. If you are visiting, or have not yet been instructed in the Lutheran faith, we ask that you speak with Pastor before the service; you are welcome to come forward for a blessing with your arms crossed.',
-    choirs: 'Adult Choir, Children\'s Choir, Handbell Choir',
-    lsbLiturgy: '', lsbHymn: '', oneLicense: '', ccli: '',
-    ackExtra: '',
-    anthems: {},
-  };
+  const DEFAULT_SETTINGS = { choirs: 'Adult Choir, Children\'s Choir, Handbell Choir', anthems: {} };
   const conf = () => Object.assign({}, DEFAULT_SETTINGS, store.settings || {});
   const ROLES = ['Lector', 'Acolyte', 'Communion Assistant', 'Elder on Duty', 'Usher', 'Altar Guild'];
   const HY = window.HYMNS;
@@ -156,6 +141,7 @@
     const lib = Object.values(idx).sort((a, b) => a.title.localeCompare(b.title));
     const edit = store.canEdit;
     return `<div class="toolbar"><b>Choir</b><span class="grow"></span><span class="muted">Add an anthem from any weekend's order of service with “+ Choir / anthem”.</span></div>
+      <div class="card pad"><label class="fld"><span>Choirs</span><input data-cfg="choirs" value="${esc(C.choirs)}" placeholder="Adult Choir, Children's Choir" ${edit ? '' : 'disabled'}></label><span class="muted" id="cfgstate"></span></div>
       <div class="card list"><div class="pad"><b>Coming up</b></div>${rows.map((r) => `<a class="row" href="#day-${esc(r.k)}"><span class="when">${esc(whenLabel(r.date))}</span>
         <span class="what"><b>${esc(r.s.value || 'Anthem TBD')}</b>${r.s.composer ? ` <span class="muted">${esc(r.s.composer)}</span>` : ''}<small>${esc(r.name)}</small></span>
         <span class="uses">${esc([r.s.group, choirAtLabel(r.s, r.p), r.s.rehearsal && 'Rehearsal: ' + r.s.rehearsal].filter(Boolean).join(' · '))}</span></a>`).join('') || '<div class="pad muted">No choir anthems planned yet.</div>'}</div>
@@ -242,6 +228,7 @@
     else if (view.name === 'reports') app.innerHTML = reportsView();
     else if (view.name === 'choir') app.innerHTML = choirView();
     else app.innerHTML = calendarView();
+    if (view.name === 'day') hydrateArt();
   }
 
   function signInView() {
@@ -436,13 +423,7 @@
     h += `<div class="card pad"><b>Volunteers</b><table class="vol"><tr><th></th>${svcs.map((x) => `<th>${esc(x.label)}</th>`).join('')}</tr>
       ${ROLES.map((r) => `<tr><td>${esc(r)}</td>${svcs.map((x, i) => `<td><input data-vol="${esc(r)}" data-i="${i}" value="${esc((p.volunteers[r] || [])[i] || '')}" ${ro}></td>`).join('')}</tr>`).join('')}</table></div>`;
 
-    // Bulletin
-    const checks = licenseChecks(p);
-    h += `<div class="card pad"><div class="cardhead"><b>Bulletin</b><span class="grow"></span>
-      <button data-act="sbCopy" title="Copies the plan in Service Builder order, to enter in Lutheran Service Builder">Copy for Service Builder</button>
-      <button data-act="bulletin">Bulletin (.docx)</button></div>
-      <label class="fld"><span>Announcements</span><textarea data-f="announcements" rows="3" placeholder="One per line — printed under “This Week”" ${ro}>${esc(p.announcements || '')}</textarea></label>
-      ${checks.length ? `<div class="checks">${checks.map((c) => `<div class="${c.level}">${esc(c.text)}</div>`).join('')}</div>` : ''}</div>`;
+    h += artCard(key, day, p);
 
     h += `<div class="card pad"><label class="fld"><span>Notes for the team</span><textarea data-f="notes" rows="3" ${ro}>${esc(p.notes)}</textarea></label>
       <div class="foot"><span id="savestate" class="muted">${saved && saved.updatedAt ? `Saved ${new Date(saved.updatedAt).toLocaleString()}${saved.updatedBy && saved.updatedBy !== 'preview' ? ' by ' + esc(saved.updatedBy) : ''}` : ''}</span>
@@ -599,7 +580,6 @@
       <span class="grow"></span><button id="csv">Download CSV</button></div>
       <div class="card pad"><b>Calendar feed</b><p class="muted">Subscribe in Google Calendar, Apple Calendar or Outlook to see every service with its hymns. Updates nightly.</p>
       ${feed ? `<div class="linkrow wide"><input readonly value="${esc(feed)}" id="feedUrl"><button id="copyFeed">Copy link</button></div>` : '<p class="muted">The feed link appears here after the first nightly update.</p>'}</div>
-      ${settingsCard()}
       <div class="card pad"><b>Song usage — ${rows.length} uses, ${Object.keys(totals).length} songs</b>
       <p class="muted">For OneLicense / CCLI reporting. Each use counts once per service time that weekend.</p>
       <table class="report"><tr><th>Song</th><th>Uses</th><th>Services</th></tr>${Object.values(totals).sort((a, b) => b.services - a.services).map((t) => `<tr><td>${esc(t.id)} ${esc(t.title)}</td><td>${t.uses}</td><td>${t.services}</td></tr>`).join('')}</table>
@@ -653,7 +633,7 @@
   // Change history: who changed what, coalescing quick edits by the same person
   const FIELD_NAMES = { slots: 'order of service', services: 'services & musicians', sermonTitle: 'sermon title', preacher: 'preacher',
     sermonNotes: 'sermon notes', notes: 'team notes', setting: 'setting', readingsOverride: 'readings', observe: 'observance',
-    observedDate: 'date kept', volunteers: 'volunteers', series: 'sermon series', locked: 'final/lock', flags: 'notes to check', announcements: 'bulletin announcements' };
+    observedDate: 'date kept', volunteers: 'volunteers', series: 'sermon series', locked: 'final/lock', flags: 'notes to check', art: 'cover art' };
   function addHistory(prev, next) {
     const hist = (prev && prev.history ? prev.history.slice() : []);
     const changed = Object.keys(FIELD_NAMES).filter((f) => JSON.stringify((prev || {})[f] ?? null) !== JSON.stringify(next[f] ?? null));
@@ -666,7 +646,6 @@
     return hist.slice(-40);
   }
 
-  // Bulletin draft as a Word document
   // ---------- Settings (shared, stored with the plans) ----------
   let confTimer = null, confDraft = null;
   function saveConf(field, value) {
@@ -675,156 +654,65 @@
     confTimer = setTimeout(async () => { const d = confDraft; confDraft = null; const st = $('#cfgstate');
       try { await store.saveSettings(d); st && (st.textContent = 'Saved'); } catch (e) { st && (st.textContent = 'Not saved: ' + e.message); } }, 600);
   }
-  function settingsCard() {
-    const C = conf(); const dis = isAdmin() ? '' : 'disabled';
-    const f = (k, label, ph = '', rows = 0) => `<label class="fld"><span>${esc(label)}</span>${rows
-      ? `<textarea data-cfg="${k}" rows="${rows}" ${dis}>${esc(C[k])}</textarea>` : `<input data-cfg="${k}" value="${esc(C[k])}" placeholder="${esc(ph)}" ${dis}>`}</label>`;
-    return `<div class="card pad"><div class="cardhead"><b>Bulletin settings</b><span class="grow"></span><span class="muted" id="cfgstate">${isAdmin() ? '' : 'Pastor Ben or Sam can change these'}</span></div>
-      ${f('churchName', 'Church name')}${f('churchLine', 'Second line')}
-      ${f('welcome', 'Welcome', '', 3)}${f('communion', 'Communion statement', '', 4)}
-      ${f('choirs', 'Choirs (comma separated)')}
-      <b class="sub">Licenses — numbers print in the acknowledgments</b>
-      <p class="muted">Service Builder's liturgy license covers the service texts; hymn texts need the separate LSB Hymn License (LSB 462 and 712 are excluded). This Far By Faith and other books need OneLicense or CCLI. Leave blank if you don't have one.</p>
-      ${f('lsbLiturgy', 'Service Builder / liturgy license #')}${f('lsbHymn', 'LSB Hymn License #')}${f('oneLicense', 'OneLicense #')}${f('ccli', 'CCLI license #')}
-      ${f('ackExtra', 'Other acknowledgments', '', 2)}</div>`;
-  }
-  function licenseChecks(p) {
-    const C = conf(); const out = [];
-    const hy = hymnsIn(p);
-    for (const h of hy) if (NOT_IN_HYMN_LICENSE[h.id]) out.push({ level: 'warn', text: `${h.id} — the LSB Hymn License doesn't cover its ${NOT_IN_HYMN_LICENSE[h.id]}. Print the number only, or get permission from the copyright holder.` });
-    const tf = hy.filter((h) => h.book === 'TFBF');
-    if (tf.length && !C.oneLicense && !C.ccli) out.push({ level: 'warn', text: `${tf.map((h) => h.id).join(', ')} — not covered by CPH licenses. Print the number only unless Bethlehem has OneLicense or CCLI.` });
-    if (hy.some((h) => h.book === 'LSB') && !C.lsbHymn) out.push({ level: 'info', text: 'No LSB Hymn License number saved — fine if the bulletin lists hymn numbers; needed to print hymn texts from Service Builder.' });
-    const ch = (p.slots || []).filter((s) => s.kind === 'choir' && s.value);
-    if (ch.length) out.push({ level: 'info', text: `Choir: ${ch.map((s) => s.value).join(', ')} — use purchased copies; licenses don't cover photocopying choral music.` });
-    return out;
-  }
-
-  // The Divine Service in order, so the bulletin and the Service Builder checklist follow the liturgy
-  function skeleton(setting) {
-    const K = (t, m, extra = {}) => Object.assign({ t, m }, extra);
-    const word = [K('Prelude', /prelude/i), K('Opening Hymn', /opening|entrance|processional/i), K('Invocation'), K('Confession and Absolution', /confession/i),
-      K('Introit', /introit/i), K('Kyrie', /kyrie/i), K('Hymn of Praise', /hymn of praise|gloria|this is the feast/i), K('Salutation and Collect of the Day', /collect of/i),
-      K('Old Testament Reading', /first reading|old testament/i, { r: 0 }), K('Psalm', /^psalm|gradual/i, { r: 1 }), K('Epistle', /epistle|second reading/i, { r: 2 }),
-      K('Alleluia and Verse', /alleluia|acclamation|^verse/i), K('Holy Gospel', /gospel reading|holy gospel/i, { r: 3 }), K('Hymn of the Day', /sermon hymn|hymn of the day/i),
-      K('Sermon', /^sermon$/i, { sermon: true }), K('Creed', /creed/i), K('Prayer of the Church', /prayer of the church/i), K('Offering', /offering|offertory/i)];
-    const end = [K('Agnus Dei', /agnus/i), K('Distribution', /distribution/i), K('Post-Communion Canticle', /nunc|post-communion|canticle|thank the lord/i),
-      K('Post-Communion Collect'), K('Benediction', /benediction/i), K('Closing Hymn', /closing|recessional|sending|depart/i), K('Postlude', /postlude/i)];
-    let mid;
-    if (/Three/.test(setting)) mid = [K('Preface'), K('Sanctus', /sanctus/i), K("Lord's Prayer", /lord.s prayer/i), K('Words of Our Lord', /words of/i), K('Pax Domini', /pax/i)];
-    else if (/Four/.test(setting)) mid = [K('Preface'), K('Sanctus', /sanctus/i), K('Prayer of Thanksgiving'), K('Words of Our Lord', /words of/i), K("Lord's Prayer", /lord.s prayer/i), K('Pax Domini', /pax/i)];
-    else if (/One|Two/.test(setting)) mid = [K('Preface'), K('Sanctus', /sanctus/i), K('Prayer of Thanksgiving'), K('Words of Our Lord', /words of/i), K('Proclamation of Christ'), K("Lord's Prayer", /lord.s prayer/i), K('Pax Domini', /pax/i)];
-    else return null; // Setting Five and the offices follow the order of service as planned
-    return word.concat([K('SERVICE OF THE SACRAMENT', null, { head: true })], mid, end);
-  }
   function slotText(s, p) {
     if (s.kind === 'choir') return [s.value ? `“${s.value}”` : '', s.composer, s.group, choirAtLabel(s, p)].filter(Boolean).join(' · ');
     const hy = hymnsIn({ slots: [s] });
     if (hy.length) return hy.map((h) => `${h.title || HY.titleFor(String(h.num), h.book) || ''} — ${h.id}`).join('; ');
     return s.value || '';
   }
-  // Ordered lines: liturgy items with the planned values slotted in; extra lines (choir, candle lighting) stay where Ben put them
-  function serviceLines(key, p, day, readings) {
-    const sk = skeleton(p.setting);
-    const out = [];
-    const fill = (k) => {
-      if (k.done) return null;
-      if (k.head) return { head: k.t };
-      let v = '';
-      if (k.r != null && readings) v = readings[k.r];
-      if (k.sermon) v = p.sermonTitle ? `“${p.sermonTitle}”${p.preacher ? ' — ' + p.preacher : ''}` : '';
-      if (k.t === 'Introit' || k.t === 'Salutation and Collect of the Day') v = v || 'Proper for the day';
-      return { label: k.t, value: v };
+
+  // ---------- Cover art (Ed Riojas, Ecclesiastical Art) ----------
+  const ART = window.ART;
+  function artDay(day, p) {
+    const obs = p && p.observe && (day.festivals || []).find((f) => f.key === p.observe);
+    if (obs) return { key: obs.key, name: obs.name, kind: 'feast', series: day.series, readings: obs.readings && obs.readings.r };
+    return day;
+  }
+  function artChoice(day, p) {
+    if (p && p.art) { const a = ART.byId(p.art); if (a) return Object.assign(a, { chosen: true }); }
+    return ART.artFor(artDay(day, p), day.series);
+  }
+  const artCache = {};
+  async function loadArt(id) {
+    if (!artCache[id]) artCache[id] = store.getArt(id).catch(() => null);
+    return artCache[id];
+  }
+  function artCard(key, day, p) {
+    const a = artChoice(day, p);
+    const edit = store.canEdit && !p.locked;
+    return `<div class="card pad artcard"><div class="cardhead"><b>Bulletin cover art</b><span class="grow"></span>
+        ${edit ? `<button class="link" data-act="artPick">Change</button>${p.art ? ' <button class="link" data-act="artReset">Use suggested</button>' : ''}` : ''}</div>
+      ${a ? `<div class="artbox" data-artid="${esc(a.id)}"><span class="muted">Loading…</span></div>
+        <div class="arttitle"><b>${esc(a.title)}</b> <span class="muted">Ed Riojas · ${esc(a.id)}${a.ref ? ` · ${esc(a.ref[0])} ${a.ref[1]}:${a.ref[2]}–${a.ref[3]}` : ''}${a.chosen ? ' · chosen' : ''}</span></div>
+        <div class="foot"><button data-act="artCopy" data-id="${esc(a.id)}">Copy image</button><button data-act="artSave" data-id="${esc(a.id)}">Save image</button>
+        <span class="muted">Paste or upload into Canva</span></div>`
+        : '<p class="muted">No matching piece in the collection — choose one with “Change”.</p>'}</div>`;
+  }
+  async function hydrateArt() {
+    for (const box of document.querySelectorAll('.artbox[data-artid]')) {
+      const id = box.dataset.artid; const url = await loadArt(id);
+      if (!box.isConnected || box.dataset.artid !== id) continue;
+      box.innerHTML = url ? `<img src="${url}" alt="">` : '<span class="muted">Image not available yet (it loads once the art upload finishes).</span>';
+    }
+  }
+  async function artBlob(id) { const url = await loadArt(id); if (!url) throw new Error('not loaded'); return (await fetch(url)).blob(); }
+  function artPicker(key, day) {
+    const box = document.createElement('div'); box.className = 'modal';
+    const sets = [[day.series, `Series ${day.series}`], ['F', 'Festivals & occasions'], ['H', 'One-year series'], ['M', 'Miscellaneous'],
+      ...['A', 'B', 'C'].filter((x) => x !== day.series).map((x) => [x, `Series ${x}`])];
+    box.innerHTML = `<div class="card pad artpick"><b>Choose cover art</b>
+      <div class="toolbar"><select id="apSet">${sets.map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select><input id="apQ" placeholder="Search title or Scripture"></div>
+      <div class="aplist"></div><div class="foot"><span class="grow"></span><button id="apCancel">Cancel</button></div></div>`;
+    document.body.appendChild(box);
+    const list = () => {
+      const set = $('#apSet', box).value, q = $('#apQ', box).value.toLowerCase();
+      $('.aplist', box).innerHTML = ART.list.filter(([id, t, r]) => id[0] === set && (!q || (id + ' ' + t + ' ' + (r ? r.join(' ') : '')).toLowerCase().includes(q)))
+        .sort((x, y) => parseInt(x[0].slice(2)) - parseInt(y[0].slice(2)))
+        .map(([id, t, r, tags]) => `<button class="row" data-pick="${esc(id)}"><span class="when">${esc(id)}</span><span class="what">${esc(t)}${tags.includes('RCL') ? ' <small>RCL</small>' : ''}</span><span class="uses">${r ? esc(`${r[0]} ${r[1]}:${r[2]}–${r[3]}`) : ''}</span></button>`).join('') || '<div class="pad muted">Nothing matches.</div>';
     };
-    if (!sk) {
-      for (const s of p.slots || []) out.push({ label: s.label, value: slotText(s, p), note: s.note });
-      if (p.sermonTitle) out.splice(Math.min(3, out.length), 0, { label: 'Sermon', value: `“${p.sermonTitle}”${p.preacher ? ' — ' + p.preacher : ''}` });
-      return out;
-    }
-    let si = 0;
-    for (const s of p.slots || []) {
-      const j = s.kind === 'choir' ? -1 : sk.findIndex((k, n) => n >= si && k.m && k.m.test(s.label));
-      if (j >= 0) {
-        while (si < j) out.push(fill(sk[si++]));
-        const base = fill(sk[si++]);
-        sk.forEach((k, n) => { if (n >= si && k.m && k.m.test(s.label)) k.done = true; }); // e.g. one "Sanctus / Agnus Dei" line
-        out.push({ label: /hymn/i.test(base.label) || s.label.length > 22 ? base.label : s.label, value: slotText(s, p) || base.value, note: s.note });
-      } else out.push({ label: s.label, value: slotText(s, p), note: s.note, extra: true });
-    }
-    while (si < sk.length) out.push(fill(sk[si++]));
-    return out.filter(Boolean);
-  }
-  function bulletinData(key) {
-    const day = findDay(key); const p = draft;
-    const obs = p.observe && (day.festivals || []).find((f) => f.key === p.observe);
-    const readings = p.readingsOverride || (obs && obs.readings && obs.readings.r) || day.readings;
-    const name = obs ? obs.name : (p.custom ? p.name : day.name);
-    const color = obs ? obs.color : day.color;
-    const nb = neighbors(day); const nextDay = nb.next && findDay(nb.next);
-    return { day, p, readings, name, color, lines: serviceLines(key, p, day, readings), next: nextDay, page: LSB_PAGE[p.setting] };
-  }
-  function serviceBuilderText(key) {
-    const b = bulletinData(key);
-    const L = [`${b.name} — ${whenLabel(servedOn(key, b.p))}`, `${b.p.setting}${b.page ? ` (LSB p. ${b.page})` : ''}${b.day.series ? ` · Series ${b.day.series}` : ''} · ${b.color}`, ''];
-    for (const l of b.lines) L.push(l.head ? `\n${l.head}` : `${l.label}: ${l.value || '—'}${l.note ? `  [${l.note}]` : ''}`);
-    return L.join('\n');
-  }
-  async function bulletin(key) {
-    if (!window.docx) await new Promise((ok, bad) => { const sc = document.createElement('script'); sc.src = 'js/vendor/docx.umd.js'; sc.onload = ok; sc.onerror = bad; document.head.appendChild(sc); });
-    const D = window.docx; const C = conf(); const b = bulletinData(key); const p = b.p;
-    const FONT = 'Georgia', TAB = 9360;
-    const R = (text, o = {}) => new D.TextRun({ text, bold: o.bold, italics: o.italics, size: o.size || 22, font: FONT, allCaps: o.caps, color: o.color });
-    const P = (runs, o = {}) => new D.Paragraph({ children: (Array.isArray(runs) ? runs : [R(runs, o)]), alignment: o.center ? D.AlignmentType.CENTER : undefined,
-      spacing: { before: o.before || 0, after: o.after ?? 100 }, tabStops: o.tab ? [{ type: D.TabStopType.RIGHT, position: TAB, leader: 'dot' }] : undefined, keepNext: o.keepNext });
-    const H = (t) => P(t, { bold: true, size: 24, caps: true, before: 240, after: 120, keepNext: true });
-    const svcs = p.services || [];
-    const times = svcs.map((s) => s.label).join(' · ');
-    const kids = [
-      P(C.churchName, { bold: true, size: 34, center: true, after: 20 }),
-      P(C.churchLine, { italics: true, size: 20, center: true, after: 280 }),
-      P(b.name, { bold: true, size: 32, center: true, after: 60 }),
-      P(whenLabel(servedOn(key, p)) + (times ? ' · ' + times : ''), { center: true, after: 60 }),
-      P(`${p.setting}${b.page ? ` — Lutheran Service Book, page ${b.page}` : ''}`, { italics: true, center: true, after: 40 }),
-      P(`Liturgical color: ${b.color[0].toUpperCase() + b.color.slice(1)}${b.day.series ? ` · Three-Year Lectionary, Series ${b.day.series}` : ''}`, { italics: true, size: 20, center: true, after: 240 }),
-      P(C.welcome, { size: 21, after: 120 }),
-    ];
-    if (/Divine Service/.test(p.setting) && C.communion) kids.push(P([R('Holy Communion. ', { bold: true, size: 20 }), R(C.communion, { size: 20, italics: true })], { after: 120 }));
-    kids.push(H('Order of Service'));
-    for (const l of b.lines) {
-      if (l.head) { kids.push(P(l.head, { bold: true, size: 20, caps: true, before: 200, after: 80, center: true })); continue; }
-      const runs = [R(l.label, { bold: !!l.value || l.extra })];
-      if (l.value) runs.push(new D.TextRun({ text: '\t' + l.value, size: 22, font: FONT }));
-      kids.push(P(runs, { tab: true, after: 60 }));
-    }
-    // Serving
-    const serving = [];
-    svcs.forEach((s) => s.musician && serving.push([`Musician (${s.label})`, s.musician]));
-    for (const s of p.slots || []) if (s.kind === 'choir' && (s.group || s.director)) serving.push([s.group || 'Choir', [s.director && `${s.director}, director`, choirAtLabel(s, p)].filter(Boolean).join(' · ') || '—']);
-    for (const r of ROLES) { const v = ((p.volunteers || {})[r] || []).map((n, i) => n ? `${n}${svcs.length > 1 ? ` (${(svcs[i] || {}).label})` : ''}` : '').filter(Boolean); if (v.length) serving.push([r, v.join(', ')]); }
-    if (p.preacher) serving.unshift(['Preacher', p.preacher]);
-    if (serving.length) { kids.push(H('Serving Today')); serving.forEach(([a, v]) => kids.push(P([R(a, { bold: true }), new D.TextRun({ text: '\t' + v, size: 22, font: FONT })], { tab: true, after: 40 }))); }
-    const ann = String(p.announcements || '').split('\n').map((x) => x.trim()).filter(Boolean);
-    if (ann.length) { kids.push(H('This Week')); ann.forEach((a) => kids.push(new D.Paragraph({ children: [R(a)], bullet: { level: 0 }, spacing: { after: 60 } }))); }
-    if (b.next) {
-      kids.push(H('Next Sunday'));
-      kids.push(P(`${b.next.name} — ${fmtLong(b.next.date)}`, { bold: true, after: 60 }));
-      if (b.next.readings) kids.push(P(READ_LABELS.map((l, i) => `${l}: ${b.next.readings[i]}`).join('  ·  '), { size: 20 }));
-    }
-    // Acknowledgments in the form CPH asks for
-    const ack = ['Lutheran Service Book © 2006 Concordia Publishing House. Lutheran Service Book: Propers of the Day © 2007 Concordia Publishing House.'];
-    if (C.lsbLiturgy) ack.push(`Created by Lutheran Service Builder © 2006 Concordia Publishing House. License ${C.lsbLiturgy}.`);
-    if (C.lsbHymn) ack.push(`Hymns reprinted under LSB Hymn License, license ${C.lsbHymn}.`);
-    if (hymnsIn(p).some((h) => h.book === 'TFBF')) ack.push('This Far By Faith © 1999 Augsburg Fortress.');
-    if (C.oneLicense) ack.push(`Reprinted under OneLicense #${C.oneLicense}. All rights reserved.`);
-    if (C.ccli) ack.push(`CCLI License #${C.ccli}.`);
-    if (C.ackExtra) ack.push(C.ackExtra);
-    kids.push(H('Acknowledgments'));
-    ack.forEach((a) => kids.push(P(a, { size: 16, italics: true, after: 40 })));
-    const doc = new D.Document({ sections: [{ properties: { page: { margin: { top: 1000, bottom: 1000, left: 1200, right: 1200 } } }, children: kids }] });
-    const blob = await D.Packer.toBlob(doc);
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = `Bulletin ${servedOn(key, p)} ${b.name.replace(/[^A-Za-z0-9 ]+/g, '')}.docx`;
-    document.body.appendChild(a); a.click(); a.remove();
+    $('#apQ', box).addEventListener('input', list); $('#apSet', box).addEventListener('change', list); list();
+    $('#apCancel', box).onclick = () => box.remove();
+    box.addEventListener('click', (e) => { const b = e.target.closest('[data-pick]'); if (!b) return; draft.art = b.dataset.pick; box.remove(); queueSave(true); });
   }
 
   // ---------- Print ----------
@@ -888,13 +776,19 @@
         let cur = sl.at && sl.at.length ? sl.at.slice() : [...Array(n).keys()];
         cur = cur.includes(j) ? cur.filter((x) => x !== j) : cur.concat(j).sort();
         sl.at = cur.length >= n || !cur.length ? [] : cur; return queueSave(true); }
-      case 'sbCopy': { const txt = serviceBuilderText(view.key); navigator.clipboard.writeText(txt).then(() => { el.textContent = 'Copied ✓'; }).catch(() => { el.textContent = 'Copy failed'; }); return; }
+      case 'artPick': return artPicker(view.key, day);
+      case 'artReset': draft.art = null; return queueSave(true);
+      case 'artCopy': { const t = el.textContent; el.textContent = 'Copying…';
+        // Safari wants the ClipboardItem built synchronously with a promise inside
+        navigator.clipboard.write([new ClipboardItem({ 'image/png': artBlob(el.dataset.id) })]).then(() => { el.textContent = 'Copied ✓ — paste in Canva'; }).catch(() => { el.textContent = 'Copy not allowed here — use Save image'; });
+        setTimeout(() => { if (el.isConnected) el.textContent = t; }, 4000); return; }
+      case 'artSave': artBlob(el.dataset.id).then((b) => { const a = document.createElement('a'); a.href = URL.createObjectURL(b);
+        a.download = `${servedOn(view.key, draft)} ${(findDay(view.key).name || '').replace(/[^A-Za-z0-9 ]+/g, '')} - Riojas ${el.dataset.id}.png`; document.body.appendChild(a); a.click(); a.remove(); }).catch(() => { el.textContent = 'Not loaded yet'; }); return;
       case 'delSlot': draft.slots.splice(i, 1); return queueSave(true);
       case 'up': if (i > 0) [draft.slots[i - 1], draft.slots[i]] = [draft.slots[i], draft.slots[i - 1]]; return queueSave(true);
       case 'down': if (i < draft.slots.length - 1) [draft.slots[i + 1], draft.slots[i]] = [draft.slots[i], draft.slots[i + 1]]; return queueSave(true);
       case 'resetSlots': if (confirmInline(el, 'Replace the order of service?')) { draft.slots = defaultSlots(draft.setting, day); queueSave(true); } return;
       case 'print': return printDay(view.key);
-      case 'bulletin': el.textContent = 'Building…'; return bulletin(view.key).catch((e) => alertInline(el, 'Failed: ' + e.message)).finally(() => { if (el.isConnected) el.textContent = 'Bulletin (.docx)'; });
       case 'lock': if (confirmInline(el, 'Lock this weekend as final?')) { draft.locked = { by: store.user ? (store.user.name || store.user.email) : 'Preview', at: new Date().toISOString() }; queueSave(true); } return;
       case 'unlock': draft.locked = null; return queueSave(true);
       case 'useHotd': { const n = el.dataset.n; const sh = draft.slots.find((x) => x.label === 'Sermon Hymn') || (draft.slots.push({ label: 'Sermon Hymn', value: '', note: '' }), draft.slots[draft.slots.length - 1]);
