@@ -95,7 +95,7 @@
   .row .what small.moved { color: var(--warn); }
   .obsrow { padding: 10px 16px; } .obsrow .chips { align-items: center; }
   .obsrow input.obsdate { width: auto; }
-  .lockbar { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 10px 16px; background: #eef3ea; border-color: #cfdcc6; }
+  .lockbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; padding: 10px 16px; background: #eef3ea; border-color: #cfdcc6; }
   .hotd { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); font-size: 14px; }
   .hotd .lbl { margin-bottom: 4px; }
   details.lastcycle, details.history { margin-top: 10px; font-size: 13.5px; }
@@ -130,6 +130,7 @@
   .artpick .aplist { overflow: auto; flex: 1; border: 1px solid #eee5d6; border-radius: 8px; }
   .artpick .aplist .row { width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid #f1ece2; cursor: pointer; }
   .artpick .aplist .row:hover { background: #faf6ee; }
+  .lockbar .officebar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; flex-basis: 100%; margin-top: 8px; }
   p.or { color: var(--muted); font-size: 13px; margin: 16px 0 0; }
   #printsheet { display: none; }
   @media (max-width: 760px) {
@@ -166,13 +167,13 @@
   <nav class="tabs"><button data-view="calendar" class="on">Church Year</button><button data-view="series">Sermon Series</button><button data-view="hymns">Hymns</button><button data-view="choir">Choir</button><button data-view="reports">Reports</button></nav>
 </header>
 <main id="app"><p class="muted">Loading…</p></main>
-<script src="firebase-config.js?v=8"></script>
-<script src="js/lectionary.js?v=8"></script>
-<script src="js/hymns.js?v=8"></script>
-<script src="js/art.js?v=8"></script>
-<script src="js/calendar.js?v=8"></script>
-<script src="js/seed.js?v=8"></script>
-<script src="js/store.js?v=8"></script>
-<script src="js/app.js?v=8"></script>
+<script src="firebase-config.js?v=9"></script>
+<script src="js/lectionary.js?v=9"></script>
+<script src="js/hymns.js?v=9"></script>
+<script src="js/art.js?v=9"></script>
+<script src="js/calendar.js?v=9"></script>
+<script src="js/seed.js?v=9"></script>
+<script src="js/store.js?v=9"></script>
+<script src="js/app.js?v=9"></script>
 </body>
 </html>

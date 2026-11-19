@@ -20,7 +20,11 @@
     'Evening Prayer', 'Service of Prayer and Preaching', 'Other'];
 
   const ADMINS = ['ben.ahlersmeyer@gmail.com', 'sam.ahlersmeyer@gmail.com'];
-  const DEFAULT_SETTINGS = { choirs: 'Adult Choir, Children\'s Choir, Handbell Choir', anthems: {} };
+  const DEFAULT_SETTINGS = { choirs: 'Adult Choir, Children\'s Choir, Handbell Choir', anthems: {}, officeName: 'Akasha', officeEmail: 'bethfw@yahoo.com' };
+  // Where each order begins in the Lutheran Service Book pew edition
+  const LSB_PAGE = { 'Divine Service, Setting One': 151, 'Divine Service, Setting Two': 167, 'Divine Service, Setting Three': 184,
+    'Divine Service, Setting Four': 203, 'Divine Service, Setting Five': 213, Matins: 219, Vespers: 229, 'Morning Prayer': 235,
+    'Evening Prayer': 243, 'Service of Prayer and Preaching': 260 };
   const conf = () => Object.assign({}, DEFAULT_SETTINGS, store.settings || {});
   const ROLES = ['Lector', 'Acolyte', 'Communion Assistant', 'Elder on Duty', 'Usher', 'Altar Guild'];
   const HY = window.HYMNS;
@@ -332,7 +336,9 @@
     </div>`;
     if (p.locked) {
       h += `<div class="card lockbar"><span>🔒 Final — locked by ${esc(p.locked.by || '')} on ${esc(new Date(p.locked.at).toLocaleDateString())}. No changes after the bulletin is printed.</span>
-        ${isAdmin() ? '<button data-act="unlock">Unlock</button>' : '<span class="muted">Ask Pastor Ben or Sam to unlock.</span>'}</div>`;
+        ${isAdmin() ? '<button data-act="unlock">Unlock</button>' : '<span class="muted">Ask Pastor Ben or Sam to unlock.</span>'}
+        <span class="officebar"><button class="primary" data-act="mailOffice">Email outline to ${esc(conf().officeName)}</button><button data-act="copyOutline">Copy outline</button>
+        ${p.officeSent ? `<span class="muted">Emailed ${esc(new Date(p.officeSent.at).toLocaleDateString())} by ${esc(p.officeSent.by)}</span>` : ''}</span></div>`;
     }
 
     if (day.kind !== 'custom') {
@@ -578,6 +584,9 @@
     const feed = store.feed;
     return `<div class="toolbar"><label>From <input type="date" id="repFrom" value="${esc(from)}"></label><label>To <input type="date" id="repTo" value="${esc(to)}"></label>
       <span class="grow"></span><button id="csv">Download CSV</button></div>
+      <div class="card pad"><div class="cardhead"><b>Church office</b><span class="grow"></span><span class="muted" id="cfgstate"></span></div>
+        <p class="muted">When a weekend is marked final, its outline is emailed here for the bulletin.</p>
+        <div class="svc"><input data-cfg="officeName" value="${esc(conf().officeName)}" placeholder="Name" ${isAdmin() ? '' : 'disabled'}><input data-cfg="officeEmail" value="${esc(conf().officeEmail)}" placeholder="Email" ${isAdmin() ? '' : 'disabled'}></div></div>
       <div class="card pad"><b>Calendar feed</b><p class="muted">Subscribe in Google Calendar, Apple Calendar or Outlook to see every service with its hymns. Updates nightly.</p>
       ${feed ? `<div class="linkrow wide"><input readonly value="${esc(feed)}" id="feedUrl"><button id="copyFeed">Copy link</button></div>` : '<p class="muted">The feed link appears here after the first nightly update.</p>'}</div>
       <div class="card pad"><b>Song usage — ${rows.length} uses, ${Object.keys(totals).length} songs</b>
@@ -633,7 +642,7 @@
   // Change history: who changed what, coalescing quick edits by the same person
   const FIELD_NAMES = { slots: 'order of service', services: 'services & musicians', sermonTitle: 'sermon title', preacher: 'preacher',
     sermonNotes: 'sermon notes', notes: 'team notes', setting: 'setting', readingsOverride: 'readings', observe: 'observance',
-    observedDate: 'date kept', volunteers: 'volunteers', series: 'sermon series', locked: 'final/lock', flags: 'notes to check', art: 'cover art' };
+    observedDate: 'date kept', volunteers: 'volunteers', series: 'sermon series', locked: 'final/lock', flags: 'notes to check', art: 'cover art', officeSent: 'emailed office' };
   function addHistory(prev, next) {
     const hist = (prev && prev.history ? prev.history.slice() : []);
     const changed = Object.keys(FIELD_NAMES).filter((f) => JSON.stringify((prev || {})[f] ?? null) !== JSON.stringify(next[f] ?? null));
@@ -715,6 +724,47 @@
     box.addEventListener('click', (e) => { const b = e.target.closest('[data-pick]'); if (!b) return; draft.art = b.dataset.pick; box.remove(); queueSave(true); });
   }
 
+  // ---------- Final outline for the church office ----------
+  function outlineText(key) {
+    const day = findDay(key); const p = draft;
+    const obs = p.observe && (day.festivals || []).find((f) => f.key === p.observe);
+    const readings = p.readingsOverride || (obs && obs.readings && obs.readings.r) || day.readings;
+    const name = obs ? obs.name : (p.custom ? p.name : day.name);
+    const when = whenLabel(servedOn(key, p));
+    const page = LSB_PAGE[p.setting];
+    const svcs = p.services || [];
+    const L = [];
+    L.push(name.toUpperCase(), when + (svcs.length ? ' — ' + svcs.map((s) => s.label).join(', ') : ''));
+    L.push(`${p.setting}${page ? ` (LSB p. ${page})` : ''} · Color: ${(obs ? obs.color : day.color)}${day.series ? ` · Series ${day.series}` : ''}`, '');
+    if (readings) { L.push('READINGS'); READ_LABELS.forEach((l, i) => L.push(`${l}: ${readings[i]}`)); L.push(''); }
+    if (p.sermonTitle || p.preacher) L.push(`SERMON: ${p.sermonTitle ? '“' + p.sermonTitle + '”' : '(title TBA)'}${p.preacher ? ' — ' + p.preacher : ''}`, '');
+    L.push('ORDER OF SERVICE');
+    for (const s of p.slots || []) {
+      let v = slotText(s, p);
+      if (!v && /First Reading|Old Testament/.test(s.label) && readings) v = readings[0];
+      else if (!v && /Epist/.test(s.label) && readings) v = readings[2];
+      else if (!v && /Gospel Reading|Holy Gospel/.test(s.label) && readings) v = readings[3];
+      L.push(`${s.label}: ${v || '—'}${s.note ? `  (${s.note})` : ''}`);
+    }
+    L.push('');
+    const serving = [];
+    svcs.forEach((s) => s.musician && serving.push(`Musician (${s.label}): ${s.musician}`));
+    for (const s of p.slots || []) if (s.kind === 'choir' && s.value) serving.push(`${s.group || 'Choir'}: ${[s.director && s.director + ', director', choirAtLabel(s, p)].filter(Boolean).join(' · ') || '—'}`);
+    for (const r of ROLES) { const v = ((p.volunteers || {})[r] || []).map((n, i) => n ? `${n}${svcs.length > 1 ? ` (${(svcs[i] || {}).label})` : ''}` : '').filter(Boolean); if (v.length) serving.push(`${r}: ${v.join(', ')}`); }
+    if (serving.length) L.push('SERVING', ...serving, '');
+    const art = artChoice(day, p);
+    if (art) L.push(`COVER ART: Ed Riojas ${art.id} — ${art.title}`, '');
+    const nb = neighbors(day); const nx = nb.next && findDay(nb.next);
+    if (nx && nx.readings) L.push(`READINGS FOR NEXT SUNDAY (${nx.name}, ${fmtLong(nx.date)})`, nx.readings[0], nx.readings[2], nx.readings[3], '');
+    if (p.notes) L.push('NOTES', p.notes, '');
+    L.push(`Marked final in the Bethlehem worship planner${p.locked ? ' by ' + p.locked.by : ''}.`);
+    return { subject: `Final service outline: ${name} — ${when}`, body: L.join('\n') };
+  }
+  function mailOffice(key) {
+    const o = outlineText(key); const C = conf();
+    location.href = `mailto:${encodeURIComponent(C.officeEmail)}?subject=${encodeURIComponent(o.subject)}&body=${encodeURIComponent(`Hi ${C.officeName},\n\nHere is the final outline for the bulletin.\n\n` + o.body)}`;
+  }
+
   // ---------- Print ----------
   function printDay(key) {
     const day = findDay(key); const p = draft;
@@ -789,7 +839,10 @@
       case 'down': if (i < draft.slots.length - 1) [draft.slots[i + 1], draft.slots[i]] = [draft.slots[i], draft.slots[i + 1]]; return queueSave(true);
       case 'resetSlots': if (confirmInline(el, 'Replace the order of service?')) { draft.slots = defaultSlots(draft.setting, day); queueSave(true); } return;
       case 'print': return printDay(view.key);
-      case 'lock': if (confirmInline(el, 'Lock this weekend as final?')) { draft.locked = { by: store.user ? (store.user.name || store.user.email) : 'Preview', at: new Date().toISOString() }; queueSave(true); } return;
+      case 'lock': if (confirmInline(el, `Lock as final and email ${conf().officeName}?`)) { const by = store.user ? (store.user.name || store.user.email) : 'Preview';
+        draft.locked = { by, at: new Date().toISOString() }; mailOffice(view.key); draft.officeSent = { by, at: new Date().toISOString() }; queueSave(true); } return;
+      case 'mailOffice': mailOffice(view.key); if (isAdmin()) { draft.officeSent = { by: store.user ? (store.user.name || store.user.email) : 'Preview', at: new Date().toISOString() }; queueSave(true); } return;
+      case 'copyOutline': navigator.clipboard.writeText(outlineText(view.key).body).then(() => { el.textContent = 'Copied ✓'; }).catch(() => { el.textContent = 'Copy failed'; }); return;
       case 'unlock': draft.locked = null; return queueSave(true);
       case 'useHotd': { const n = el.dataset.n; const sh = draft.slots.find((x) => x.label === 'Sermon Hymn') || (draft.slots.push({ label: 'Sermon Hymn', value: '', note: '' }), draft.slots[draft.slots.length - 1]);
         sh.value = `LSB ${n} "${HY.titleFor(n)}"`; sh.note = 'Hymn of the Day'; return queueSave(true); }
