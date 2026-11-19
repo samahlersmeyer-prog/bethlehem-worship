@@ -66,9 +66,10 @@
         S('Sanctus / Agnus Dei', 'LSB 208 Sanctus, 210 Agnus Dei'), S('Distribution', 'Prayerful Meditation'),
         S('Post-Communion', 'LSB 211'), S('Closing Hymn'), S('Postlude')];
     } else if (/Divine Service/.test(setting)) {
-      slots = [S('Prelude'), S('Opening Hymn'), S('Hymn of Praise', praise), S('Gospel Acclamation', alleluia),
+      const one = /One|Two/.test(setting);
+      slots = [S('Prelude'), S('Opening Hymn'), S('Hymn of Praise', praise), S(one ? 'Alleluia and Verse' : 'Gospel Acclamation', alleluia),
         S('Sermon Hymn'), S('Creed', creed), S('Offertory'), S('Sanctus'), S('Agnus Dei'), S('Distribution'),
-        S('Post-Communion Canticle'), S('Closing Hymn'), S('Postlude')];
+        S(one ? 'Nunc Dimittis' : 'Post-Communion Canticle'), S('Closing Hymn'), S('Postlude')];
     } else {
       slots = [S('Prelude'), S('Opening Hymn'), S('Psalmody'), S('Office Hymn'), S('Sermon Hymn'), S('Canticle'), S('Closing Hymn'), S('Postlude')];
     }
@@ -410,7 +411,6 @@
       <label class="fld"><span>Sermon series</span><input data-f="series" value="${esc(p.series || '')}" placeholder="e.g. The Light of Christ" list="serieslist" ${ro}></label>
       <label class="fld"><span>Preacher</span><input data-f="preacher" value="${esc(p.preacher)}" placeholder="Pastor Ben" ${ro}></label>
       <label class="fld"><span>Text & notes</span><textarea data-f="sermonNotes" rows="2" ${ro}>${esc(p.sermonNotes)}</textarea></label>
-      <label class="fld"><span>Setting</span><select data-f="setting" ${ro}>${SETTINGS.map((s) => `<option ${s === p.setting ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select></label>
       <b class="sub">Services & musicians</b>
       ${(p.services || []).map((s, i) => `<div class="svc"><input data-f="services.${i}.label" value="${esc(s.label)}" ${ro}><input data-f="services.${i}.musician" value="${esc(s.musician)}" placeholder="Musician" ${ro}>${store.canEdit && !p.locked ? `<button class="icon" data-act="delSvc" data-i="${i}" title="Remove">×</button>` : ''}</div>`).join('')}
       ${store.canEdit && !p.locked ? '<button class="link" data-act="addSvc">+ Add service time</button>' : ''}
@@ -418,7 +418,11 @@
 
     // Order of service
     h += `<div class="card pad"><div class="cardhead"><b>Order of service</b>
-      ${store.canEdit && !p.locked ? `<span class="grow"></span>${copyFromSelect(key, day)}<button class="link" data-act="resetSlots">Reset to ${esc(p.setting.replace('Divine Service, ', ''))} defaults</button>` : ''}</div>
+      <span class="grow"></span>${store.canEdit && !p.locked ? `${copyFromSelect(key, day)}<button class="link" data-act="resetSlots">Start over</button>` : ''}</div>
+      <label class="fld setting"><span>Setting</span><select id="settingSel" ${ro}>
+        <optgroup label="Divine Service">${SETTINGS.slice(0, 5).map((x) => `<option value="${esc(x)}" ${x === p.setting ? 'selected' : ''}>${esc(x.replace('Divine Service, ', ''))}${LSB_PAGE[x] ? ` — LSB p. ${LSB_PAGE[x]}` : ''}</option>`).join('')}</optgroup>
+        <optgroup label="Daily Office & other">${SETTINGS.slice(5).map((x) => `<option value="${esc(x)}" ${x === p.setting ? 'selected' : ''}>${esc(x)}${LSB_PAGE[x] ? ` — LSB p. ${LSB_PAGE[x]}` : ''}</option>`).join('')}</optgroup>
+      </select></label>
       <div class="slots">`;
     const anthemIdx = anthemIndex();
     (p.slots || []).forEach((s, i) => {
@@ -543,12 +547,36 @@
   }
 
 
+  // Switch setting: lay out that setting's lines, keeping hymns and notes already filled in (and extra lines like the choir)
+  function changeSetting(setting) {
+    const day = findDay(view.key); const old = draft.slots || [];
+    const fresh = defaultSlots(setting, day);
+    // what part of the liturgy a line is, so "Gospel Alleluia" in one setting finds "Alleluia and Verse" in another
+    const role = (l) => /alleluia|acclamation|^verse/i.test(l) ? 'alleluia' : /post-communion|nunc|canticle|thank the lord/i.test(l) ? 'post'
+      : /sanctus|agnus|creed|offertory|kyrie|preface|confession|prayer of the church|reading|hymn of praise|gloria/i.test(l) ? 'liturgy:' + l.toLowerCase() : null;
+    const isHymn = (s) => /"/.test(s.value || '') || /hymn|prelude|postlude|distribution/i.test(s.label) && !/hymn of praise/i.test(s.label);
+    const used = new Set();
+    for (const f of fresh) {
+      const i = old.findIndex((o, n) => !used.has(n) && o.kind !== 'choir' && (o.label === f.label || (role(o.label) && role(o.label) === role(f.label))));
+      if (i < 0) continue;
+      used.add(i);
+      if (old[i].value && isHymn(old[i])) { f.value = old[i].value; f.note = old[i].note; } // hymns move; liturgy pages belong to the setting
+    }
+    // Ben's own lines (choir, candle lighting, musical offering…) stay, after the line they followed
+    old.forEach((o, n) => {
+      if (used.has(n) || (role(o.label) && !/"/.test(o.value || ''))) return;
+      let at = fresh.length;
+      for (let m = n - 1; m >= 0; m--) { const j = fresh.findIndex((f) => f.label === old[m].label || (role(old[m].label) && role(f.label) === role(old[m].label))); if (j >= 0) { at = j + 1; break; } }
+      fresh.splice(at, 0, JSON.parse(JSON.stringify(o)));
+    });
+    draft.setting = setting; draft.slots = fresh; queueSave(true);
+  }
   function copyFromSelect(key, day) {
     const lc = lastCycle(day);
     const others = Object.entries(store.all()).filter(([k, x]) => k !== key && x.slots && x.slots.length)
       .map(([k, x]) => ({ k, date: servedOn(k, x), name: x.custom ? x.name : ((findDay(k) || {}).name || k) }))
       .sort((a, b) => b.date.localeCompare(a.date)).slice(0, 60);
-    return `<select class="copyfrom" title="Copy the order of service from another service"><option value="">Copy order from…</option>
+    return `<select class="copyfrom" title="Copies the setting, every line and its hymns from another weekend, so you only change what's different"><option value="">Copy another weekend's order…</option>
       ${lc ? `<option value="${esc(lc.date)}">Last cycle: ${esc(fmtLong(lc.date))}</option>` : ''}
       ${others.map((o) => `<option value="${esc(o.k)}">${esc(fmt(o.date))} — ${esc(o.name)}</option>`).join('')}</select>`;
   }
@@ -919,7 +947,7 @@
       case 'delSlot': draft.slots.splice(i, 1); return queueSave(true);
       case 'up': if (i > 0) [draft.slots[i - 1], draft.slots[i]] = [draft.slots[i], draft.slots[i - 1]]; return queueSave(true);
       case 'down': if (i < draft.slots.length - 1) [draft.slots[i + 1], draft.slots[i]] = [draft.slots[i], draft.slots[i + 1]]; return queueSave(true);
-      case 'resetSlots': if (confirmInline(el, 'Replace the order of service?')) { draft.slots = defaultSlots(draft.setting, day); queueSave(true); } return;
+      case 'resetSlots': if (confirmInline(el, 'Clear all lines back to the setting?')) { draft.slots = defaultSlots(draft.setting, day); queueSave(true); } return;
       case 'print': return printDay(view.key);
       case 'lock': case 'approve': if (confirmInline(el, `Lock as final and send to ${conf().officeName}?`)) {
         draft.locked = { by: who(), at: new Date().toISOString() };
@@ -1011,7 +1039,7 @@
   });
   document.addEventListener('change', (e) => {
     if (e.target.id === 'yearSel') { curYear = +e.target.value; render(); }
-    if (e.target.dataset.f === 'setting' && draft) render();
+    if (e.target.id === 'settingSel' && draft) { changeSetting(e.target.value); }
     if (/^slots\.\d+\.value$/.test(e.target.dataset.f || '') && draft) {
       const v = expandHymn(e.target.value);
       if (v !== e.target.value) { e.target.value = v; setPath(draft, e.target.dataset.f, v); queueSave(true); }
