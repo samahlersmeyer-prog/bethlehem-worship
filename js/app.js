@@ -771,7 +771,7 @@
   // Liturgy with LSB page numbers, in bulletin order (Divine Service, Setting One — from Bethlehem's bulletin)
   const DS1 = [['Opening Hymn', /opening|entrance/i], ['Confession and Absolution', /confession/i, 'p. 151'],
     ['Hymn of Praise', /hymn of praise|this is the feast|gloria/i, 'p. 155'], ['Salutation and Collect', /collect/i, 'p. 156'],
-    ['Old Testament', /first reading|old testament/i, null, 0], ['Psalm', /^psalm/i, null, 1], ['Epistle', /epistle/i, null, 2],
+    ['Old Testament', /first reading|old testament/i, null, 0], ['Epistle', /epistle/i, null, 2],
     ['Alleluia and Verse', /alleluia|verse|acclamation/i, 'p. 156'], ['Holy Gospel', /gospel reading|holy gospel/i, null, 3],
     ['Hymn of the Day', /sermon hymn|hymn of the day/i], ['Sermon', /^sermon$/i], ['Creed', /creed/i],
     ['Prayer of the Church', /prayer of the church/i], ['Offering and Offertory', /offering|offertory/i, 'p. 159'],
@@ -832,7 +832,7 @@
       while (next < DS1.length) emit(DS1[next++]);
       L.push(...lines);
     } else {
-      if (readings) L.push(...READ_LABELS.map((l, i) => `${l}: ${readings[i]}`));
+      if (readings) L.push(...READ_LABELS.map((l, i) => `${l}: ${readings[i]}`).filter((_, i) => i !== 1)); // Bethlehem doesn't read the Psalm
       if (p.sermonTitle) L.push(`Sermon: “${p.sermonTitle}”${p.preacher ? ' — ' + p.preacher : ''}`);
       for (const s of p.slots || []) {
         let v = fmtSlot(s);
