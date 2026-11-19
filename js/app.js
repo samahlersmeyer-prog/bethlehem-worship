@@ -740,40 +740,86 @@
   }
 
   // ---------- Final outline for the church office ----------
+  // Liturgy with LSB page numbers, in bulletin order (Divine Service, Setting One — from Bethlehem's bulletin)
+  const DS1 = [['Opening Hymn', /opening|entrance/i], ['Confession and Absolution', /confession/i, 'p. 151'],
+    ['Hymn of Praise', /hymn of praise|this is the feast|gloria/i, 'p. 155'], ['Salutation and Collect', /collect/i, 'p. 156'],
+    ['Old Testament', /first reading|old testament/i, null, 0], ['Psalm', /^psalm/i, null, 1], ['Epistle', /epistle/i, null, 2],
+    ['Alleluia and Verse', /alleluia|verse|acclamation/i, 'p. 156'], ['Holy Gospel', /gospel reading|holy gospel/i, null, 3],
+    ['Hymn of the Day', /sermon hymn|hymn of the day/i], ['Sermon', /^sermon$/i], ['Creed', /creed/i],
+    ['Prayer of the Church', /prayer of the church/i], ['Offering and Offertory', /offering|offertory/i, 'p. 159'],
+    ['Preface', /preface/i, 'p. 160'], ['Sanctus', /sanctus/i, 'p. 161'], ['Prayer of Thanksgiving', /thanksgiving/i, 'p. 161'],
+    ["Lord's Prayer", /lord.s prayer/i, 'p. 162'], ['Words of Our Lord', /words of/i, 'p. 162'], ['Pax Domini', /pax/i, 'p. 163'],
+    ['Agnus Dei', /agnus/i, 'p. 163'], ['Distribution', /distribution/i], ['Nunc Dimittis', /nunc|post-communion canticle/i, 'p. 165'],
+    ['Post-Communion Collect', /post-communion collect/i, 'p. 166'], ['Benediction', /benediction/i, 'p. 166'], ['Closing Hymn', /closing|recessional|sending/i]];
+  const ORD = ['', 'First', 'Second', 'Third', 'Fourth', 'Fifth', 'Sixth', 'Seventh', 'Eighth', 'Ninth', 'Tenth', 'Eleventh', 'Twelfth', 'Thirteenth', 'Fourteenth',
+    'Fifteenth', 'Sixteenth', 'Seventeenth', 'Eighteenth', 'Nineteenth', 'Twentieth'];
+  const ordinal = (n) => n <= 20 ? ORD[n] : 'Twenty-' + ORD[n - 20];
+  // "Twenty-Sixth Sunday after Pentecost" — how Bethlehem's bulletin names the Sundays after Pentecost
+  function pentecostName(day) {
+    if (!day || day.kind !== 'sunday') return '';
+    const pent = yearData(CY.yearOf(CY.parse(day.date))).days.find((d) => d.key === 'pentecost');
+    if (!pent || day.date <= pent.date || !/^proper|^lastSunday|^trinity/.test(day.key)) return '';
+    const n = Math.round((CY.parse(day.date) - CY.parse(pent.date)) / (7 * 864e5));
+    return n >= 1 && n <= 29 ? `${ordinal(n)} Sunday after Pentecost` : '';
+  }
+  function servingLines(p) {
+    const svcs = p.services || []; const out = [];
+    svcs.forEach((s) => s.musician && out.push(`Musician (${s.label}): ${s.musician}`));
+    for (const s of p.slots || []) if (s.kind === 'choir' && s.value) out.push(`${s.group || 'Choir'}: ${[s.director && s.director + ', director', choirAtLabel(s, p)].filter(Boolean).join(' · ') || '—'}`);
+    for (const r of ROLES) { const v = ((p.volunteers || {})[r] || []).map((n, i) => n ? `${n}${svcs.length > 1 ? ` (${(svcs[i] || {}).label})` : ''}` : '').filter(Boolean); if (v.length) out.push(`${r}: ${v.join(', ')}`); }
+    if (p.preacher) out.unshift(`Preacher: ${p.preacher}`);
+    return out;
+  }
+  // Final outline for the church office, in the same order as the bulletin template (cover → order of service → serving → next Sunday)
   function outlineText(key) {
     const day = findDay(key); const p = draft;
     const obs = p.observe && (day.festivals || []).find((f) => f.key === p.observe);
     const readings = p.readingsOverride || (obs && obs.readings && obs.readings.r) || day.readings;
     const name = obs ? obs.name : (p.custom ? p.name : day.name);
+    const pname = obs ? '' : pentecostName(day);
     const when = whenLabel(servedOn(key, p));
     const page = LSB_PAGE[p.setting];
     const svcs = p.services || [];
+    const art = artChoice(day, p);
     const L = [];
-    L.push(name.toUpperCase(), when + (svcs.length ? ' — ' + svcs.map((s) => s.label).join(', ') : ''));
-    L.push(`${p.setting}${page ? ` (LSB p. ${page})` : ''} · Color: ${(obs ? obs.color : day.color)}${day.series ? ` · Series ${day.series}` : ''}`, '');
-    if (readings) { L.push('READINGS'); READ_LABELS.forEach((l, i) => L.push(`${l}: ${readings[i]}`)); L.push(''); }
-    if (p.sermonTitle || p.preacher) L.push(`SERMON: ${p.sermonTitle ? '“' + p.sermonTitle + '”' : '(title TBA)'}${p.preacher ? ' — ' + p.preacher : ''}`, '');
-    L.push('ORDER OF SERVICE');
-    for (const s of p.slots || []) {
-      let v = slotText(s, p);
-      if (!v && /First Reading|Old Testament/.test(s.label) && readings) v = readings[0];
-      else if (!v && /Epist/.test(s.label) && readings) v = readings[2];
-      else if (!v && /Gospel Reading|Holy Gospel/.test(s.label) && readings) v = readings[3];
-      L.push(`${s.label}: ${v || '—'}${s.note ? `  (${s.note})` : ''}`);
+    L.push('— PAGE 1 · COVER —', pname ? pname : name, pname ? `(${name})` : null, when, svcs.map((s) => s.label).join(' · ') || null,
+      art ? `Cover art: Ed Riojas ${art.id} — ${art.title}` : null, `Color: ${obs ? obs.color : day.color}`, '');
+    L.push('— PAGE 2 · ORDER OF SERVICE —', `${p.setting}${page ? ` · Lutheran Service Book p. ${page}` : ''}`);
+    const fmtSlot = (s) => slotText(s, p);
+    if (/Setting One/.test(p.setting)) {
+      const used = new Set(); let next = 0; const lines = [];
+      const emit = (k, s) => {
+        const [label, , pg, r] = k; let v = s ? fmtSlot(s) : '';
+        if (r != null && readings) v = v || readings[r];
+        if (label === 'Sermon') v = p.sermonTitle ? `“${p.sermonTitle}”${p.preacher ? ' — ' + p.preacher : ''}` : v;
+        if (label === 'Creed' && s && /apostles/i.test(s.value || '')) v = `Apostles' Creed · p. 159`;
+        lines.push(`${label}${v ? ': ' + v : ''}${pg && !(label === 'Creed') ? ' · ' + pg : ''}${s && s.note ? `  (${s.note})` : ''}`);
+      };
+      for (const s of p.slots || []) {
+        const j = s.kind === 'choir' ? -1 : DS1.findIndex((k, n) => n >= next && k[1].test(s.label));
+        if (j < 0) { lines.push(`${s.label}: ${fmtSlot(s) || '—'}${s.note ? `  (${s.note})` : ''}`); continue; }
+        while (next < j) emit(DS1[next++]);
+        emit(DS1[next++], s);
+      }
+      while (next < DS1.length) emit(DS1[next++]);
+      L.push(...lines);
+    } else {
+      if (readings) L.push(...READ_LABELS.map((l, i) => `${l}: ${readings[i]}`));
+      if (p.sermonTitle) L.push(`Sermon: “${p.sermonTitle}”${p.preacher ? ' — ' + p.preacher : ''}`);
+      for (const s of p.slots || []) {
+        let v = fmtSlot(s);
+        if (!v && /First Reading|Old Testament|Epist|Gospel Reading/.test(s.label)) continue;
+        L.push(`${s.label}: ${v || '—'}${s.note ? `  (${s.note})` : ''}`);
+      }
     }
     L.push('');
-    const serving = [];
-    svcs.forEach((s) => s.musician && serving.push(`Musician (${s.label}): ${s.musician}`));
-    for (const s of p.slots || []) if (s.kind === 'choir' && s.value) serving.push(`${s.group || 'Choir'}: ${[s.director && s.director + ', director', choirAtLabel(s, p)].filter(Boolean).join(' · ') || '—'}`);
-    for (const r of ROLES) { const v = ((p.volunteers || {})[r] || []).map((n, i) => n ? `${n}${svcs.length > 1 ? ` (${(svcs[i] || {}).label})` : ''}` : '').filter(Boolean); if (v.length) serving.push(`${r}: ${v.join(', ')}`); }
-    if (serving.length) L.push('SERVING', ...serving, '');
-    const art = artChoice(day, p);
-    if (art) L.push(`COVER ART: Ed Riojas ${art.id} — ${art.title}`, '');
-    const nb = neighbors(day); const nx = nb.next && findDay(nb.next);
-    if (nx && nx.readings) L.push(`READINGS FOR NEXT SUNDAY (${nx.name}, ${fmtLong(nx.date)})`, nx.readings[0], nx.readings[2], nx.readings[3], '');
-    if (p.notes) L.push('NOTES', p.notes, '');
-    L.push(`Marked final in the Bethlehem worship planner${p.locked ? ' by ' + p.locked.by : ''}.`);
-    return { subject: `Final service outline: ${name} — ${when}`, body: L.join('\n') };
+    const nb = neighbors(day); const nx = nb.next && findDay(nb.next); const np = nx && store.get(nx.date);
+    L.push('— PAGE 3 · SERVING —', 'This weekend:', ...(servingLines(p).length ? servingLines(p) : ['(not filled in yet)']));
+    if (np) { const sv = servingLines(np); if (sv.length) L.push('', `Next weekend (${whenLabel(servedOn(nx.date, np))}):`, ...sv); }
+    if (nx && nx.readings) L.push('', `READINGS FOR NEXT SUNDAY — ${nx.name}`, nx.readings[0], nx.readings[2], nx.readings[3]);
+    if (p.notes) L.push('', 'NOTES FROM THE TEAM', p.notes);
+    L.push('', `Marked final in the Bethlehem worship planner${p.locked ? ' by ' + p.locked.by : ''}.`);
+    return { subject: `Final service outline: ${pname || name} — ${when}`, body: L.filter((x) => x !== null).join('\n') };
   }
   const who = () => store.user ? (store.user.name || store.user.email) : 'Preview';
   // Emails go out automatically when the mailer is running (it checks in every few minutes);
