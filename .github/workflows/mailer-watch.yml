@@ -1,0 +1,17 @@
+name: Mailer watch
+on:
+  schedule:
+    - cron: '23 * * * *'   # hourly; a failed run emails the repo owner
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Check the automatic mailer is running
+        working-directory: scripts
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: npm install --no-audit --no-fund --silent && node check-mailer.mjs

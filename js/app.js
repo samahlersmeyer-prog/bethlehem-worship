@@ -245,6 +245,18 @@
     else if (view.name === 'serving') app.innerHTML = servingView();
     else app.innerHTML = calendarView();
     if (view.name === 'day') hydrateArt();
+    const warn = mailerWarning();
+    if (warn) app.insertAdjacentHTML('afterbegin', `<div class="card pad mailwarn" role="alert"><b>⚠️ Automatic email isn't working.</b> ${esc(warn)}</div>`);
+  }
+  // Shown to Ben and Sam when the mailer has gone quiet or an email has sat in the queue,
+  // because then approvals don't reach the office and the Canva bulletin isn't built.
+  function mailerWarning() {
+    if (store.mode !== 'firebase' || !store.user || !store.canEdit || !isAdmin() || !store.mailerChecked) return '';
+    const stuck = Object.entries(store.all()).filter(([, p]) => p && p.outboxPending && (p.outbox || []).some((m) => m.pending && Date.now() - Date.parse(m.at) > 15 * 60e3));
+    const ago = store.mailerAt ? `last ran ${new Date(store.mailerAt).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}` : 'has never run';
+    if (!store.mailerLive) return `The email script ${ago}. Until Sam restarts it, "Approve & send" opens your own email app, and the office's Canva bulletin won't be built automatically. Let Sam know.`;
+    if (stuck.length) return `${stuck.length === 1 ? 'An email has' : stuck.length + ' emails have'} been waiting more than 15 minutes to send. Let Sam know.`;
+    return '';
   }
 
   function signInView() {
