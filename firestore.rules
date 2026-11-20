@@ -2,7 +2,7 @@ rules_version = '2';
 // Only the planning team can read or edit plans. Sign-in by Google or emailed link
 // (both verify the address); unverified email/password accounts are refused.
 // A weekend marked final (locked) can only be changed or unlocked by an admin,
-// except its serving names (volunteers, preacher, musicians), which the office keeps up to date.
+// except its serving names (volunteers, preacher, musicians) and the website bulletin link, which the office keeps up to date.
 // Add or remove people here AND in the Firebase console (Firestore → Rules).
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -21,7 +21,7 @@ service cloud.firestore {
     }
     function servingOnly() {
       return request.resource.data.diff(resource.data).affectedKeys()
-        .hasOnly(['volunteers', 'preacher', 'services', 'history', 'updatedAt', 'updatedBy', 'outbox', 'outboxPending']);
+        .hasOnly(['volunteers', 'preacher', 'services', 'history', 'updatedAt', 'updatedBy', 'outbox', 'outboxPending', 'bulletinUrl']);
     }
     match /plans/{id} {
       allow read, create: if team();

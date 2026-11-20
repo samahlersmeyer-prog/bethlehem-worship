@@ -1,6 +1,7 @@
 // Nightly: reads plans from Firestore and writes
 //   feeds/<token>.ics        — private calendar feed for the team (unguessable URL)
-//   public/this-sunday.json  — public data for the "This Sunday" box on bethlehemlcms.org
+//   public/this-sunday.json  — public data for bethlehemlcms.org: This Sunday box, order of service (final weekends only),
+//                              upcoming services for the calendar, and links to finished bulletins
 // Also stores the feed URL in Firestore (config/feed) so the app can show it.
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -92,11 +93,35 @@ const toPublic = ({ e, i }) => { const p = e.plan || {};
   return { date: i.date, name: i.name, color: i.color, readings: i.readings ? Object.fromEntries(i.readings.map((r, k) => [LBL[k], r])) : null,
     sermonTitle: p.sermonTitle || null, preacher: p.preacher || null,
     hymns: (p.slots || []).filter((s) => s.value && isHymn(s) && /hymn/i.test(s.label)).map((s) => ({ label: s.label, hymn: s.value.replace(/^LSB /, 'LSB ') })),
-    services: (p.services || []).map((s) => s.label) }; };
+    services: (p.services || []).map((s) => s.label), bulletinUrl: safeUrl(p.bulletinUrl), order: order(p) }; };
+// Only https links go public (the office pastes these in the planner)
+const safeUrl = (u) => { try { const x = new URL(String(u || '').trim()); return x.protocol === 'https:' ? x.href : null; } catch { return null; } };
+// Order of service, public only once Pastor has marked the weekend final. Team notes and serving names stay private.
+const order = (p) => (p && p.locked ? (p.slots || []).filter((s) => s.label).map((s) => ({ label: s.label, value: s.value || '' })) : null);
+// Upcoming services (next 8 weeks) for the website calendar
+const horizon = CY.iso(CY.add(CY.parse(todayET), 56));
+const calendar = [];
+for (const e of entries) {
+  const i = info(e), p = e.plan;
+  if (!p && e.day.kind !== 'sunday') continue;
+  const svcs = p && p.services && p.services.length ? p.services : [{ label: 'Saturday 4:00 pm' }, { label: 'Sunday 9:00 am' }];
+  for (const s of serviceTimes(i.date, svcs)) {
+    if (s.d < todayET || s.d > horizon) continue;
+    const time = s.allDay ? null : `${s.h % 12 || 12}:${String(s.min).padStart(2, '0')} ${s.h < 12 ? 'am' : 'pm'}`;
+    calendar.push({ date: s.d, time, name: i.name, color: i.color, sort: s.allDay ? 0 : s.h * 60 + s.min });
+  }
+}
+calendar.sort((a, b) => a.date.localeCompare(b.date) || a.sort - b.sort).forEach((c) => delete c.sort);
+// Finished bulletins, newest first
+const bulletins = entries.map((e) => ({ e, i: info(e) })).filter(({ e }) => e.plan && safeUrl(e.plan.bulletinUrl))
+  .sort((a, b) => b.i.date.localeCompare(a.i.date)).slice(0, 52)
+  .map(({ e, i }) => ({ date: i.date, name: i.name, url: safeUrl(e.plan.bulletinUrl) }));
+
 fs.mkdirSync(path.join(root, 'public'), { recursive: true });
 fs.writeFileSync(path.join(root, 'public', 'this-sunday.json'), JSON.stringify({
   updated: new Date().toISOString(), church: 'Bethlehem Lutheran Church', thisSunday: pub[0] ? toPublic(pub[0]) : null,
   upcoming: pub.slice(1, 5).map(toPublic).map(({ date, name, sermonTitle, readings }) => ({ date, name, sermonTitle, gospel: readings && readings.Gospel })),
+  calendar, bulletins,
 }, null, 1));
 
 const url = `https://bethlehem-worship.web.app/feeds/${token}.ics`;
