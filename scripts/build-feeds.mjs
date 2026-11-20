@@ -93,11 +93,9 @@ const toPublic = ({ e, i }) => { const p = e.plan || {};
   return { date: i.date, name: i.name, color: i.color, readings: i.readings ? Object.fromEntries(i.readings.map((r, k) => [LBL[k], r])) : null,
     sermonTitle: p.sermonTitle || null, preacher: p.preacher || null,
     hymns: (p.slots || []).filter((s) => s.value && isHymn(s) && /hymn/i.test(s.label)).map((s) => ({ label: s.label, hymn: s.value.replace(/^LSB /, 'LSB ') })),
-    services: (p.services || []).map((s) => s.label), bulletinUrl: safeUrl(p.bulletinUrl), order: order(p) }; };
+    services: (p.services || []).map((s) => s.label), bulletinUrl: safeUrl(p.bulletinUrl) }; };
 // Only https links go public (the office pastes these in the planner)
 const safeUrl = (u) => { try { const x = new URL(String(u || '').trim()); return x.protocol === 'https:' ? x.href : null; } catch { return null; } };
-// Order of service, public only once Pastor has marked the weekend final. Team notes and serving names stay private.
-const order = (p) => (p && p.locked ? (p.slots || []).filter((s) => s.label).map((s) => ({ label: s.label, value: s.value || '' })) : null);
 // Upcoming services (next 8 weeks) for the website calendar
 const horizon = CY.iso(CY.add(CY.parse(todayET), 56));
 const calendar = [];
@@ -116,12 +114,17 @@ calendar.sort((a, b) => a.date.localeCompare(b.date) || a.sort - b.sort).forEach
 const bulletins = entries.map((e) => ({ e, i: info(e) })).filter(({ e }) => e.plan && safeUrl(e.plan.bulletinUrl))
   .sort((a, b) => b.i.date.localeCompare(a.i.date)).slice(0, 52)
   .map(({ e, i }) => ({ date: i.date, name: i.name, url: safeUrl(e.plan.bulletinUrl) }));
+// The Messenger (monthly newsletter), newest first, labeled by the month of the weekend it was added to
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const messengers = entries.map((e) => ({ e, i: info(e) })).filter(({ e }) => e.plan && safeUrl(e.plan.messengerUrl))
+  .sort((a, b) => b.i.date.localeCompare(a.i.date)).slice(0, 24)
+  .map(({ e, i }) => ({ date: i.date, month: MONTHS[+i.date.slice(5, 7) - 1] + ' ' + i.date.slice(0, 4), url: safeUrl(e.plan.messengerUrl) }));
 
 fs.mkdirSync(path.join(root, 'public'), { recursive: true });
 fs.writeFileSync(path.join(root, 'public', 'this-sunday.json'), JSON.stringify({
   updated: new Date().toISOString(), church: 'Bethlehem Lutheran Church', thisSunday: pub[0] ? toPublic(pub[0]) : null,
   upcoming: pub.slice(1, 5).map(toPublic).map(({ date, name, sermonTitle, readings }) => ({ date, name, sermonTitle, gospel: readings && readings.Gospel })),
-  calendar, bulletins,
+  calendar, bulletins, messengers,
 }, null, 1));
 
 const url = `https://bethlehem-worship.web.app/feeds/${token}.ics`;
