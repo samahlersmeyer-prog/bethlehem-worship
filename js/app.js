@@ -470,6 +470,12 @@
       <table class="vol"><tr><th></th>${svcs.map((x) => `<th>${esc(x.label)}</th>`).join('')}</tr>
       ${ROLES.map((r) => `<tr><td>${esc(r)}</td>${svcs.map((x, i) => `<td><input data-vol="${esc(r)}" data-i="${i}" value="${esc((p.volunteers[r] || [])[i] || '')}" ${roVol}></td>`).join('')}</tr>`).join('')}</table></div>`;
 
+    // Website: link to the finished bulletin (the office adds it after the weekend is final)
+    const roWeb = store.canEdit ? '' : 'disabled';
+    h += `<div class="card pad"><div class="cardhead"><b>Website</b></div>
+      <label class="fld"><span>Finished bulletin link</span><input type="url" data-f="bulletinUrl" value="${esc(p.bulletinUrl || '')}" placeholder="https://…" ${roWeb}></label>
+      <p class="muted">Paste a link anyone can open: in Canva, Share → Public view link (or a Google Drive / PDF link). It appears on bethlehemlcms.org the next morning. The order of service also shows on the website once this weekend is marked final.</p></div>`;
+
     h += artCard(key, day, p);
 
     h += `<div class="card pad"><label class="fld"><span>Notes for the team</span><textarea data-f="notes" rows="3" ${ro}>${esc(p.notes)}</textarea></label>
@@ -708,7 +714,7 @@
   // Change history: who changed what, coalescing quick edits by the same person
   const FIELD_NAMES = { slots: 'order of service', services: 'services & musicians', sermonTitle: 'sermon title', preacher: 'preacher',
     sermonNotes: 'sermon notes', notes: 'team notes', setting: 'setting', readingsOverride: 'readings', observe: 'observance',
-    observedDate: 'date kept', volunteers: 'serving', series: 'sermon series', locked: 'final/lock', flags: 'notes to check', art: 'cover art', officeSent: 'emailed office' };
+    observedDate: 'date kept', volunteers: 'serving', series: 'sermon series', locked: 'final/lock', flags: 'notes to check', art: 'cover art', officeSent: 'emailed office', bulletinUrl: 'website bulletin link' };
   function addHistory(prev, next) {
     const hist = (prev && prev.history ? prev.history.slice() : []);
     const changed = Object.keys(FIELD_NAMES).filter((f) => JSON.stringify((prev || {})[f] ?? null) !== JSON.stringify(next[f] ?? null));
