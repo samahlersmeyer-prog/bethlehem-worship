@@ -29,6 +29,9 @@
     'Divine Service, Setting Four': 203, 'Divine Service, Setting Five': 213, Matins: 219, Vespers: 229, 'Morning Prayer': 235,
     'Evening Prayer': 243, 'Service of Prayer and Preaching': 260 };
   const conf = () => Object.assign({}, DEFAULT_SETTINGS, store.settings || {});
+  // Weekends and church-year days get a printed bulletin; special and midweek services don't unless ticked
+  const wantsBulletin = (p) => (p && p.bulletin != null ? !!p.bulletin : !(p && p.custom));
+  const approveLabel = (p) => wantsBulletin(p) ? `Approve & send to ${esc(conf().officeName)}` : 'Approve (no bulletin)';
   // Same roles, same order as the "Serving" tables in Bethlehem's bulletin
   const ROLES = ['Altar Guild', 'Elder', 'Head Usher', 'Reader', 'PowerPoint Operator', 'Live Stream', 'Soundboard Operator'];
   const OLD_ROLE = { 'Elder on Duty': 'Elder', Usher: 'Head Usher', Lector: 'Reader' };
@@ -372,7 +375,7 @@
     if (!p.locked && p.review && p.review.state) {
       const r = p.review;
       if (r.state === 'submitted') h += `<div class="card reviewbar"><span>📨 Submitted to ${esc(conf().pastorName)} by ${esc(r.by)} on ${esc(new Date(r.at).toLocaleDateString())}.${r.message ? ` “${esc(r.message)}”` : ''}</span>
-        ${isAdmin() ? `<span class="officebar"><button class="primary" data-act="approve">Approve & send to ${esc(conf().officeName)}</button><input id="sendBackNote" placeholder="What needs changing?"><button data-act="sendBack">Send back</button></span>` : `<span class="muted">Waiting for ${esc(conf().pastorName)}.</span>`}</div>`;
+        ${isAdmin() ? `<span class="officebar"><button class="primary" data-act="approve">${approveLabel(p)}</button><input id="sendBackNote" placeholder="What needs changing?"><button data-act="sendBack">Send back</button></span>` : `<span class="muted">Waiting for ${esc(conf().pastorName)}.</span>`}</div>`;
       else if (r.state === 'changes') h += `<div class="card reviewbar chg"><span>↩︎ ${esc(r.reviewer || conf().pastorName)} asked for changes${r.note ? `: “${esc(r.note)}”` : '.'}</span>
         ${store.canEdit ? '<button data-act="submitReview">Resubmit</button>' : ''}</div>`;
     }
@@ -435,6 +438,7 @@
       <b class="sub">Services & musicians</b>
       ${(p.services || []).map((s, i) => `<div class="svc"><input data-f="services.${i}.label" value="${esc(s.label)}" ${ro}><input data-f="services.${i}.musician" value="${esc(s.musician)}" placeholder="Musician" ${ro}>${store.canEdit && !p.locked ? `<button class="icon" data-act="delSvc" data-i="${i}" title="Remove">×</button>` : ''}</div>`).join('')}
       ${store.canEdit && !p.locked ? '<button class="link" data-act="addSvc">+ Add service time</button>' : ''}
+      <label class="chk"><input type="checkbox" data-f="bulletin" ${wantsBulletin(p) ? 'checked' : ''} ${ro}> Printed bulletin — when approved, ${esc(conf().officeName)} gets the outline and the Canva bulletin is built. Either way, the service shows on the church website calendar.</label>
     </div></div>`;
 
     // Order of service
@@ -484,7 +488,7 @@
       <div class="foot"><span id="savestate" class="muted">${saved && saved.updatedAt ? `Saved ${new Date(saved.updatedAt).toLocaleString()}${saved.updatedBy && saved.updatedBy !== 'preview' ? ' by ' + esc(saved.updatedBy) : ''}` : ''}</span>
       <span class="grow"></span><button data-act="print">Print / PDF</button>
       ${store.canEdit && saved && !p.locked && !isAdmin() && !(p.review && p.review.state === 'submitted') ? `<input id="submitMsg" placeholder="Note for ${esc(conf().pastorName)} (optional)"><button class="primary" data-act="submitReview">Submit to ${esc(conf().pastorName)}</button>` : ''}
-      ${store.canEdit && saved && !p.locked && isAdmin() ? `<button class="primary" data-act="approve">Approve & send to ${esc(conf().officeName)} 🔒</button>` : ''}
+      ${store.canEdit && saved && !p.locked && isAdmin() ? `<button class="primary" data-act="approve">${approveLabel(p)} 🔒</button>` : ''}
       ${store.canEdit && !p.locked && day.kind === 'custom' ? '<button class="danger" data-act="delCustom">Delete service</button>' : ''}</div>
       ${p.history && p.history.length ? `<details class="history"><summary>Change history (${p.history.length})</summary>${p.history.slice().reverse().map((x) => `<div><span class="muted">${esc(new Date(x.at).toLocaleString())}</span> · ${esc(x.by || '')} · ${esc(x.what)}</div>`).join('')}</details>` : ''}</div>`;
     return h;
@@ -835,7 +839,7 @@
   // (sent by the mailer); the morning bulletin run patches that week's Canva bulletin from it.
   function servingChanged(key, p) {
     if (!store.mailerLive) return;
-    if (!(p.locked || (p.review && p.review.state === 'approved'))) return;
+    if (!(p.locked || (p.review && p.review.state === 'approved')) || !wantsBulletin(p)) return;
     const day = findDay(key); if (!day) return;
     const name = p.custom ? p.name : (pentecostName(day) || day.name);
     const when = whenLabel(servedOn(key, p));
@@ -1040,10 +1044,11 @@
       case 'down': if (i < draft.slots.length - 1) [draft.slots[i + 1], draft.slots[i]] = [draft.slots[i], draft.slots[i + 1]]; return queueSave(true);
       case 'resetSlots': if (confirmInline(el, 'Clear all lines back to the setting?')) { draft.slots = defaultSlots(draft.setting, day); queueSave(true); } return;
       case 'print': return printDay(view.key);
-      case 'lock': case 'approve': if (confirmInline(el, `Lock as final and send to ${conf().officeName}?`)) {
+      case 'lock': case 'approve': if (confirmInline(el, wantsBulletin(draft) ? `Lock as final and send to ${conf().officeName}?` : 'Lock as final? (No bulletin, nothing is emailed.)')) {
         draft.locked = { by: who(), at: new Date().toISOString() };
         draft.review = Object.assign({}, draft.review, { state: 'approved', reviewer: who(), reviewedAt: new Date().toISOString() });
-        sendMail('office', view.key); draft.officeSent = { by: who(), at: new Date().toISOString() }; queueSave(true); } return;
+        if (wantsBulletin(draft)) { sendMail('office', view.key); draft.officeSent = { by: who(), at: new Date().toISOString() }; }
+        queueSave(true); } return;
       case 'mailOffice': sendMail('office', view.key); if (isAdmin()) { draft.officeSent = { by: who(), at: new Date().toISOString() }; queueSave(true); } return;
       case 'submitReview': { const m = ($('#submitMsg') || {}).value || '';
         draft.review = { state: 'submitted', by: who(), byEmail: store.user ? store.user.email : '', at: new Date().toISOString(), message: m.trim() };
@@ -1073,17 +1078,18 @@
     box.innerHTML = `<div class="card pad"><b>Add a special service</b>
       <label class="fld"><span>Name</span><input id="spName" placeholder="Advent Midweek Vespers"></label>
       <label class="fld"><span>Date</span><input id="spDate" type="date"></label>
+      <label class="fld"><span>Time</span><input id="spTime" value="7:00 pm"></label>
       <div class="foot"><span class="grow"></span><button id="spCancel">Cancel</button><button class="primary" id="spOk">Add</button></div></div>`;
     document.body.appendChild(box);
     $('#spCancel', box).onclick = () => box.remove();
     $('#spOk', box).onclick = async () => {
-      const name = $('#spName', box).value.trim(); const date = $('#spDate', box).value;
+      const name = $('#spName', box).value.trim(); const date = $('#spDate', box).value; const time = $('#spTime', box).value.trim();
       if (!name || !date) return;
       const key = `custom-${date}-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30)}`;
       const y = CY.yearOf(CY.parse(date));
       const host = yearData(y).days.filter((d) => d.date <= date && d.kind === 'sunday').pop();
       await store.save(key, { custom: true, date, name, color: host ? host.color : 'white', setting: 'Vespers',
-        services: [{ label: 'Service', musician: '' }], slots: defaultSlots('Vespers', { season: host ? host.season : '' }), flags: [] });
+        services: [{ label: time ? `${WD[CY.dow(CY.parse(date))]} ${time}` : 'Service', musician: '' }], slots: defaultSlots('Vespers', { season: host ? host.season : '' }), flags: [] });
       box.remove(); location.hash = `#day-${key}`;
     };
   }
@@ -1123,7 +1129,7 @@
   });
   document.addEventListener('input', (e) => {
     const f = e.target.dataset.f;
-    if (f && draft) { setPath(draft, f, e.target.value); queueSave(false); }
+    if (f && draft) { setPath(draft, f, e.target.type === 'checkbox' ? e.target.checked : e.target.value); queueSave(e.target.type === 'checkbox'); }
     if (e.target.dataset.vol && draft) { const r = e.target.dataset.vol; const arr = (draft.volunteers[r] = draft.volunteers[r] || []); arr[+e.target.dataset.i] = e.target.value; servingChanged(draft.__key, draft); queueSave(false); }
     if (e.target.dataset.sv) servingInput(e.target);
     if (e.target.dataset.cfg) saveConf(e.target.dataset.cfg, e.target.value);
