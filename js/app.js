@@ -17,7 +17,8 @@
   const READ_LABELS = ['First Reading', 'Psalm', 'Epistle', 'Gospel'];
   const SETTINGS = ['Divine Service, Setting One', 'Divine Service, Setting Two', 'Divine Service, Setting Three',
     'Divine Service, Setting Four', 'Divine Service, Setting Five', 'Matins', 'Vespers', 'Morning Prayer',
-    'Evening Prayer', 'Service of Prayer and Preaching', 'Other'];
+    'Evening Prayer', 'Service of Prayer and Preaching', 'Holden Evening Prayer',
+    'The Way of the Cross (This Far By Faith)', 'Other'];
 
   const ADMINS = ['ben.ahlersmeyer@gmail.com', 'sam.ahlersmeyer@gmail.com'];
   const DEFAULT_SETTINGS = { choirs: 'Adult Choir, Children\'s Choir, Handbell Choir', anthems: {}, officeName: 'Akasha', officeEmail: 'bethfw@yahoo.com',
